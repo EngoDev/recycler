@@ -22,6 +22,9 @@ pub struct Trash {
     pub word: String,
 }
 
+#[derive(Component, Debug, Clone)]
+pub struct BufferText;
+
 #[derive(Resource)]
 struct TrashSpawnTimer(Timer);
 
@@ -38,8 +41,14 @@ impl Plugin for TrashPlugin {
         app.insert_resource(TrashSpawnTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
         .insert_resource(TypingBuffer("".to_string()))
         .insert_resource(AvailableWords(get_available_words_from_file()))
-        // app.add_systems(OnEnter(GameState::Playing), spawn_player)
-        .add_systems(Update, spawn_trash.run_if(in_state(GameState::Playing)));
+        .add_systems(OnEnter(GameState::Playing), spawn_ui)
+        .add_systems(Update, (
+                spawn_trash.run_if(in_state(GameState::Playing)),
+                typing.run_if(in_state(GameState::Playing)),
+                destroy_matching_trash.after(typing),
+                update_buffer_text.after(typing),
+            )
+        );
     }
 }
 
@@ -157,6 +166,99 @@ fn get_trash_sprite(trash_type: &TrashType, textures: &Res<TextureAssets>) -> Ha
 //     }
 // }
 
+fn spawn_ui(
+    mut commands: Commands,
+    typing_buffer: Res<TypingBuffer>,
+    // window: Query<&Window>,
+) {
+    // let window = window.single();
+    // let y_pos = window.height() / -2.0;
+    commands
+        .spawn((
+            TextBundle::from_section(
+                typing_buffer.0.clone(),
+                TextStyle {
+                    font_size: 50.0,
+                    ..default()
+                }
+            )
+            .with_text_alignment(TextAlignment::Center)
+            .with_style(Style {
+                    position_type: PositionType::Absolute,
+                    bottom: Val::Px(5.0),
+                    // right: Val::Px(5.0),
+                    ..default()
+                }),
+            BufferText,
+            )
+        );
+        // .spawn(Text2dBundle {
+        //     text: Text::from_section(typing_buffer.0.clone(), TextStyle {
+        //         color: Color::WHITE,
+        //         font_size: 40.0,
+        //         ..default()
+        //
+        //     }),//.with_alignment(TextAlignment::Center),
+        //     transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
+        //     ..Default::default()
+        // });
+}
+
+fn update_buffer_text(
+    typing_buffer: Res<TypingBuffer>,
+    mut query: Query<&mut Text, With<BufferText>>,
+) {
+    for mut text in &mut query {
+        text.sections[0].value = typing_buffer.0.clone();
+    }
+}
+
+fn typing(
+    // mut commands: Commands,
+    mut typing_buffer: ResMut<TypingBuffer>,
+    keyboard_input: Res<Input<KeyCode>>,
+) {
+
+    if keyboard_input.just_pressed(KeyCode::Back) || keyboard_input.pressed(KeyCode::Back) {
+        typing_buffer.0.pop();
+    }
+
+
+    for key in keyboard_input.get_just_pressed() {
+        match key {
+            KeyCode::A => typing_buffer.0.push('a'),
+            KeyCode::B => typing_buffer.0.push('b'),
+            KeyCode::C => typing_buffer.0.push('c'),
+            KeyCode::D => typing_buffer.0.push('d'),
+            KeyCode::E => typing_buffer.0.push('e'),
+            KeyCode::F => typing_buffer.0.push('f'),
+            KeyCode::G => typing_buffer.0.push('g'),
+            KeyCode::H => typing_buffer.0.push('h'),
+            KeyCode::I => typing_buffer.0.push('i'),
+            KeyCode::J => typing_buffer.0.push('j'),
+            KeyCode::K => typing_buffer.0.push('k'),
+            KeyCode::L => typing_buffer.0.push('l'),
+            KeyCode::M => typing_buffer.0.push('m'),
+            KeyCode::N => typing_buffer.0.push('n'),
+            KeyCode::O => typing_buffer.0.push('o'),
+            KeyCode::P => typing_buffer.0.push('p'),
+            KeyCode::Q => typing_buffer.0.push('q'),
+            KeyCode::R => typing_buffer.0.push('r'),
+            KeyCode::S => typing_buffer.0.push('s'),
+            KeyCode::T => typing_buffer.0.push('t'),
+            KeyCode::U => typing_buffer.0.push('u'),
+            KeyCode::V => typing_buffer.0.push('v'),
+            KeyCode::W => typing_buffer.0.push('w'),
+            KeyCode::X => typing_buffer.0.push('x'),
+            KeyCode::Y => typing_buffer.0.push('y'),
+            KeyCode::Z => typing_buffer.0.push('z'),
+            _ => {}
+        }
+    }
+
+    println!("Bufffer: {}", typing_buffer.0);
+}
+
 
 fn destroy_matching_trash(
     mut commands: Commands,
@@ -169,8 +271,12 @@ fn destroy_matching_trash(
             trash_to_destroy.push(entity);
         }
     }
-    for entity in trash_to_destroy {
-        commands.entity(entity).despawn();
+    for entity in &trash_to_destroy {
+        commands.entity(*entity).despawn();
+    }
+
+    if trash_to_destroy.len() > 0 {
+        typing_buffer.0 = "".to_string();
     }
 }
 
