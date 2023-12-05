@@ -5,6 +5,8 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::winit::WinitWindows;
 use bevy::DefaultPlugins;
+use bevy_rapier2d::plugin::{RapierPhysicsPlugin, NoUserData};
+use bevy_rapier2d::render::RapierDebugRenderPlugin;
 use recycler::GamePlugin; // ToDo: Replace bevy_game with your new crate name.
 use std::io::Cursor;
 use bevy::asset::AssetMetaCheck;
@@ -28,6 +30,8 @@ fn main() {
             }),
             ..default()
         }))
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
+        .add_plugins(RapierDebugRenderPlugin::default())
         .add_plugins(GamePlugin)
         .add_systems(Startup, set_window_icon)
         .run();
