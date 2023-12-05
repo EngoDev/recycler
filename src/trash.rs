@@ -54,7 +54,6 @@ impl Plugin for TrashPlugin {
 }
 
 impl Trash {
-
     pub fn get_by_type(trash_type: TrashType, word: String) -> Self {
         match trash_type {
             TrashType::Bottle => Self::bottle(word),
@@ -141,29 +140,43 @@ fn spawn_trash(
 
 pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, trash: Trash, pos: Vec2) {
     let sprite = get_trash_sprite(&trash.trash_type, textures);
+    let mut transform = Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0));
+    transform.scale = Vec3::new(1.5, 1.5, 1.5);
+    transform.rotation = Quat::from_rotation_y(30.0);
 
-    commands
-        .spawn(SpriteBundle {
-            texture: sprite,
-            transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)),
-            ..Default::default()
-        })
-        .insert(RigidBody::Dynamic)
-        .insert(Collider::cuboid(trash.size.x, trash.size.y))
-        .insert(ColliderMassProperties::Mass(1.0))
-        .insert(Text2dBundle {
+    let text = commands.spawn(Text2dBundle {
             text: Text::from_section(trash.word.clone(), TextStyle {
                 color: Color::WHITE,
                 font_size: 20.0,
                 ..default()
 
             }),//.with_alignment(TextAlignment::Center),
-            transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 1.0)),
+            // transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 1.0)),
+            // transform: transform.clone(),
             // Custom anchor point. Top left is `(-0.5, 0.5)`, center is `(0.0, 0.0)`. The value will
             text_anchor: Anchor::Custom(Vec2::new(0.0, -2.0)),
             ..default()
         })
-        .insert(trash);
+        // .insert(RigidBody::Fixed)
+        .id();
+
+    let sprite = commands
+        .spawn(SpriteBundle {
+            texture: sprite,
+            // transform: transform.clone(), // Transform::from_scale(Vec3::new(1.5, 1.5, 1.5)), //transform.clone(),
+            ..default()
+        })
+        // .insert(Velocity::angular(3.0))
+        .id();
+        // .insert(trash)
+        // .add_child(text);
+    commands.spawn(trash.clone())
+        .insert(Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)))
+        .insert(RigidBody::Dynamic)
+        .insert(Collider::cuboid(trash.size.x, trash.size.y))
+        .insert(ColliderMassProperties::Mass(1.0))
+        .add_child(sprite)
+        .add_child(text);
 }
 
 
@@ -247,21 +260,22 @@ fn create_borders(commands: &mut Commands, textures: &Res<TextureAssets>, max_x:
             .insert(Collider::cuboid(32.0, 32.0)
             // .insert(ColliderMassProperties::Mass(1.0)
         );
-    }
 
-    // for x in (0..=max_x as u32).step_by(16) {
-    //     println!("Spawning x: {} y: {}", x, max_y);
-    //     commands.spawn(
-    //         SpriteBundle {
-    //             texture: textures.ground.clone(),
-    //             transform: Transform::from_translation(Vec3::new(x as f32 * -1.0, y_pos, 0.0)),
-    //             ..Default::default()
-    //         })
-    //         .insert(RigidBody::Fixed)
-    //         .insert(Collider::cuboid(16.0, 16.0)
-    //         // .insert(ColliderMassProperties::Mass(1.0)
-    //     );
-    // }
+        commands.spawn(
+            SpriteBundle {
+                sprite: Sprite {
+                    custom_size: Some(Vec2::new(48.0, 48.0)),
+                    ..default()
+                },
+                texture: textures.ground.clone(),
+                transform: Transform::from_translation(Vec3::new(x as f32 * -1.0, y_pos, 0.0)),
+                ..Default::default()
+            })
+            .insert(RigidBody::Fixed)
+            .insert(Collider::cuboid(32.0, 32.0)
+            // .insert(ColliderMassProperties::Mass(1.0)
+        );
+    }
 }
 
 
@@ -330,7 +344,7 @@ fn destroy_matching_trash(
         }
     }
     for entity in &trash_to_destroy {
-        commands.entity(*entity).despawn();
+        commands.entity(*entity).despawn_recursive();
     }
 
     if trash_to_destroy.len() > 0 {
