@@ -37,4 +37,8 @@ pub struct TextureAssets {
     pub bottle: Handle<Image>,
     #[asset(path = "textures/pizza.png")]
     pub pizza: Handle<Image>,
+    #[asset(path = "textures/ground.png")]
+    pub ground: Handle<Image>,
+    #[asset(path = "textures/wall.png")]
+    pub wall: Handle<Image>,
 }

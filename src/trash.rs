@@ -20,6 +20,7 @@ pub enum TrashType {
 pub struct Trash {
     pub trash_type: TrashType,
     pub word: String,
+    pub size: Vec2,
 }
 
 #[derive(Component, Debug, Clone)]
@@ -41,7 +42,7 @@ impl Plugin for TrashPlugin {
         app.insert_resource(TrashSpawnTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
         .insert_resource(TypingBuffer("".to_string()))
         .insert_resource(AvailableWords(get_available_words_from_file()))
-        .add_systems(OnEnter(GameState::Playing), spawn_ui)
+        .add_systems(OnEnter(GameState::Playing), setup)
         .add_systems(Update, (
                 spawn_trash.run_if(in_state(GameState::Playing)),
                 typing.run_if(in_state(GameState::Playing)),
@@ -49,6 +50,32 @@ impl Plugin for TrashPlugin {
                 update_buffer_text.after(typing),
             )
         );
+    }
+}
+
+impl Trash {
+
+    pub fn get_by_type(trash_type: TrashType, word: String) -> Self {
+        match trash_type {
+            TrashType::Bottle => Self::bottle(word),
+            TrashType::Pizza => Self::pizza(word),
+        }
+    }
+
+    pub fn bottle(word: String) -> Self {
+        Self {
+            trash_type: TrashType::Bottle,
+            word,
+            size: Vec2::new(15.0, 16.0),
+        }
+    }
+
+    pub fn pizza(word: String) -> Self {
+        Self {
+            trash_type: TrashType::Pizza,
+            word,
+            size: Vec2::new(32.0, 16.0),
+        }
     }
 }
 
@@ -79,10 +106,10 @@ fn spawn_trash(
         // A solution might be to have search to search for a word as long as it's not in a list of
         // already used words which we can get from a query
         // Also we need to be able to to limit the amount of letters in a word
-        let trash = Trash {
-            trash_type,
-            word: get_random_word(&available_words)
-        };
+        let trash = Trash::get_by_type(trash_type, get_random_word(&available_words));
+        //     trash_type,
+        //     word: 
+        // };
 
         println!("Spawning trash: {:?}", trash);
         create_trash(&mut commands, &textures, trash, Vec2::new(random_x as f32, y_pos));
@@ -122,7 +149,7 @@ pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, tras
             ..Default::default()
         })
         .insert(RigidBody::Dynamic)
-        .insert(Collider::cuboid(0.5, 0.5))
+        .insert(Collider::cuboid(trash.size.x, trash.size.y))
         .insert(ColliderMassProperties::Mass(1.0))
         .insert(Text2dBundle {
             text: Text::from_section(trash.word.clone(), TextStyle {
@@ -166,13 +193,12 @@ fn get_trash_sprite(trash_type: &TrashType, textures: &Res<TextureAssets>) -> Ha
 //     }
 // }
 
-fn spawn_ui(
+fn setup(
     mut commands: Commands,
+    textures: Res<TextureAssets>,
+    window: Query<&Window>,
     typing_buffer: Res<TypingBuffer>,
-    // window: Query<&Window>,
 ) {
-    // let window = window.single();
-    // let y_pos = window.height() / -2.0;
     commands
         .spawn((
             TextBundle::from_section(
@@ -192,17 +218,52 @@ fn spawn_ui(
             BufferText,
             )
         );
-        // .spawn(Text2dBundle {
-        //     text: Text::from_section(typing_buffer.0.clone(), TextStyle {
-        //         color: Color::WHITE,
-        //         font_size: 40.0,
-        //         ..default()
-        //
-        //     }),//.with_alignment(TextAlignment::Center),
-        //     transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
-        //     ..Default::default()
-        // });
+
+
+    let window = window.single();
+    let max_x: f32 = window.width() / 2.0;
+    let max_y = window.height() / 2.0;
+
+    create_borders(&mut commands, &textures, max_x, max_y)
 }
+
+
+fn create_borders(commands: &mut Commands, textures: &Res<TextureAssets>, max_x: f32, max_y: f32) {
+    let y_pos = (max_y * -1.0) + 16.0;
+
+    for x in (0..=max_x as u32).step_by(48) {
+        println!("Spawning x: {} y: {}", x, max_y);
+        commands.spawn(
+            SpriteBundle {
+                sprite: Sprite {
+                    custom_size: Some(Vec2::new(48.0, 48.0)),
+                    ..default()
+                },
+                texture: textures.ground.clone(),
+                transform: Transform::from_translation(Vec3::new(x as f32, y_pos, 0.0)),
+                ..Default::default()
+            })
+            .insert(RigidBody::Fixed)
+            .insert(Collider::cuboid(32.0, 32.0)
+            // .insert(ColliderMassProperties::Mass(1.0)
+        );
+    }
+
+    // for x in (0..=max_x as u32).step_by(16) {
+    //     println!("Spawning x: {} y: {}", x, max_y);
+    //     commands.spawn(
+    //         SpriteBundle {
+    //             texture: textures.ground.clone(),
+    //             transform: Transform::from_translation(Vec3::new(x as f32 * -1.0, y_pos, 0.0)),
+    //             ..Default::default()
+    //         })
+    //         .insert(RigidBody::Fixed)
+    //         .insert(Collider::cuboid(16.0, 16.0)
+    //         // .insert(ColliderMassProperties::Mass(1.0)
+    //     );
+    // }
+}
+
 
 fn update_buffer_text(
     typing_buffer: Res<TypingBuffer>,
@@ -214,7 +275,6 @@ fn update_buffer_text(
 }
 
 fn typing(
-    // mut commands: Commands,
     mut typing_buffer: ResMut<TypingBuffer>,
     keyboard_input: Res<Input<KeyCode>>,
 ) {
@@ -255,8 +315,6 @@ fn typing(
             _ => {}
         }
     }
-
-    println!("Bufffer: {}", typing_buffer.0);
 }
 
 
