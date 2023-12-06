@@ -35,6 +35,9 @@ pub struct BufferText;
 pub struct TrashActive;
 
 #[derive(Component)]
+pub struct TrashMarked;
+
+#[derive(Component)]
 pub struct Wall;
 
 // #[derive(Component, Debug, Clone)]
@@ -64,7 +67,7 @@ impl Plugin for TrashPlugin {
         .add_systems(Update, (
                 spawn_trash.run_if(in_state(GameState::Playing)),
                 handle_trash_collision.before(typing),
-                typing.run_if(in_state(GameState::Playing)),
+                typing.after(handle_trash_collision),
                 destroy_matching_trash.after(typing),
                 update_buffer_text.after(typing),
                 highlight_character.after(typing),
@@ -250,25 +253,47 @@ fn setup(
     window: Query<&Window>,
     typing_buffer: Res<TypingBuffer>,
 ) {
-    commands
-        .spawn((
-            TextBundle::from_section(
-                typing_buffer.0.clone(),
-                TextStyle {
-                    font_size: 50.0,
-                    ..default()
-                }
-            )
-            .with_text_alignment(TextAlignment::Center)
-            .with_style(Style {
-                    position_type: PositionType::Absolute,
-                    bottom: Val::Px(5.0),
-                    // right: Val::Px(5.0),
-                    ..default()
-                }),
-            BufferText,
-            )
-        );
+    // commands
+    //     .spawn(NodeBundle {
+    //         style: Style {
+    //             width: Val::Percent(100.),
+    //             height: Val::Percent(100.),
+    //             flex_direction: FlexDirection::Column,
+    //             ..default()
+    //         },
+    //         ..default()
+    //     })
+    //     .with_children(|parent| {
+
+    commands.spawn((
+        TextBundle::from_section(
+            typing_buffer.0.clone(),
+            TextStyle {
+                font_size: 50.0,
+                ..default()
+            }
+        )
+        // .with_text_alignment(TextAlignment::Center)
+        .with_style(Style {
+                // align_self: AlignSelf::FlexEnd,
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                position_type: PositionType::Absolute,
+                top: Val::Percent(50.0),
+                left: Val::Percent(50.0),
+                max_width: Val::Px(200.0),
+                max_height: Val::Percent(100.0),
+                flex_wrap: FlexWrap::WrapReverse,
+                // flex_wrap: FlexWrap::Wrap,
+                // bottom: Val::Px(5.0),
+                // right: Val::Px(5.0),
+                ..default()
+            }),
+        BufferText,
+        )
+    );
+
+    // });
 
 
     let window = window.single();
@@ -359,8 +384,11 @@ fn fix_trash_label_rotation(
 
 
 fn typing(
+    mut commands: Commands,
     mut typing_buffer: ResMut<TypingBuffer>,
     keyboard_input: Res<Input<KeyCode>>,
+    trash_query: Query<(&Parent, &TrashText)>,
+    marked_trash_query: Query<Entity, With<TrashMarked>>,
     // time: Res<Time>,
     // mut delete_timer: ResMut<BufferTextDeleteTimer>,
 ) {
@@ -385,38 +413,78 @@ fn typing(
     //     }
     // }
 
+    let mut buffer_word = typing_buffer.0.clone();
 
     for key in keyboard_input.get_just_pressed() {
         match key {
-            KeyCode::A => typing_buffer.0.push('a'),
-            KeyCode::B => typing_buffer.0.push('b'),
-            KeyCode::C => typing_buffer.0.push('c'),
-            KeyCode::D => typing_buffer.0.push('d'),
-            KeyCode::E => typing_buffer.0.push('e'),
-            KeyCode::F => typing_buffer.0.push('f'),
-            KeyCode::G => typing_buffer.0.push('g'),
-            KeyCode::H => typing_buffer.0.push('h'),
-            KeyCode::I => typing_buffer.0.push('i'),
-            KeyCode::J => typing_buffer.0.push('j'),
-            KeyCode::K => typing_buffer.0.push('k'),
-            KeyCode::L => typing_buffer.0.push('l'),
-            KeyCode::M => typing_buffer.0.push('m'),
-            KeyCode::N => typing_buffer.0.push('n'),
-            KeyCode::O => typing_buffer.0.push('o'),
-            KeyCode::P => typing_buffer.0.push('p'),
-            KeyCode::Q => typing_buffer.0.push('q'),
-            KeyCode::R => typing_buffer.0.push('r'),
-            KeyCode::S => typing_buffer.0.push('s'),
-            KeyCode::T => typing_buffer.0.push('t'),
-            KeyCode::U => typing_buffer.0.push('u'),
-            KeyCode::V => typing_buffer.0.push('v'),
-            KeyCode::W => typing_buffer.0.push('w'),
-            KeyCode::X => typing_buffer.0.push('x'),
-            KeyCode::Y => typing_buffer.0.push('y'),
-            KeyCode::Z => typing_buffer.0.push('z'),
+            KeyCode::A => buffer_word.push('a'),
+            KeyCode::B => buffer_word.push('b'),
+            KeyCode::C => buffer_word.push('c'),
+            KeyCode::D => buffer_word.push('d'),
+            KeyCode::E => buffer_word.push('e'),
+            KeyCode::F => buffer_word.push('f'),
+            KeyCode::G => buffer_word.push('g'),
+            KeyCode::H => buffer_word.push('h'),
+            KeyCode::I => buffer_word.push('i'),
+            KeyCode::J => buffer_word.push('j'),
+            KeyCode::K => buffer_word.push('k'),
+            KeyCode::L => buffer_word.push('l'),
+            KeyCode::M => buffer_word.push('m'),
+            KeyCode::N => buffer_word.push('n'),
+            KeyCode::O => buffer_word.push('o'),
+            KeyCode::P => buffer_word.push('p'),
+            KeyCode::Q => buffer_word.push('q'),
+            KeyCode::R => buffer_word.push('r'),
+            KeyCode::S => buffer_word.push('s'),
+            KeyCode::T => buffer_word.push('t'),
+            KeyCode::U => buffer_word.push('u'),
+            KeyCode::V => buffer_word.push('v'),
+            KeyCode::W => buffer_word.push('w'),
+            KeyCode::X => buffer_word.push('x'),
+            KeyCode::Y => buffer_word.push('y'),
+            KeyCode::Z => buffer_word.push('z'),
             _ => {}
         }
     }
+
+    // if typing_buffer.0.len() == 0 {
+    //     typing_buffer.0 = buffer_word.clone();
+    // }
+
+
+    let mut to_be_removed = vec![];
+    let mut is_existing_matching_word = false;
+
+    for (parent, trash_text) in trash_query.iter() {
+        if trash_text.word.starts_with(&buffer_word) {
+            if marked_trash_query.get(parent.get()).is_err() {
+                commands.entity(parent.get()).insert(TrashMarked);
+                // commands.entity(parent.get()).remove::<TrashMarked>();
+            }
+            is_existing_matching_word = true;
+            // ui_text.sections = highlight_characters(&ui_text.sections, typing_buffer.0.len(), trash_text.highlight_color)
+        } else {
+            if marked_trash_query.get(parent.get()).is_ok() {
+                to_be_removed.push(parent.get());
+            }
+        }
+    }
+
+    if is_existing_matching_word {
+        typing_buffer.0 = buffer_word.clone();
+    }
+
+    for entity in to_be_removed {
+        commands.entity(entity).remove::<TrashMarked>();
+    }
+    // for possible_match in possible_matches {
+    //     if possible_match.1.word.starts_with(&buffer_word) {
+    //         typing_buffer.0 = buffer_word;
+    //         return
+    //     } else {
+    //         commands.entity(possible_match.0.get()).remove::<TrashMarked>();
+    //     }
+    // }
 }
 
 fn highlight_character(
@@ -426,79 +494,52 @@ fn highlight_character(
     for (trash_text, mut ui_text) in &mut trash_query.iter_mut() {
         if trash_text.word.starts_with(&typing_buffer.0) {
             ui_text.sections = highlight_characters(&ui_text.sections, typing_buffer.0.len(), trash_text.highlight_color)
-            // trash_text.highlight_characters(typing_buffer.0.len());
         } else {
             ui_text.sections = remove_highlight(&ui_text.sections, trash_text.color)
-            // trash_text.remove_highlight();
         }
-        // let mut highlighted_characters: Vec<bool> = Vec::new();
-        // for character in characters.iter() {
-        //     highlighted_characters.push(typing_buffer.0.contains(character));
-        // }
-        // trash_text.text = characters;
     }
 }
 
 fn remove_trash_text(commands: &mut Commands, trash_entity: &Entity) {
     commands.entity(*trash_entity).remove::<TrashActive>();
+    commands.entity(*trash_entity).remove::<TrashMarked>();
     commands.entity(*trash_entity).despawn_descendants();
 }
 
 fn handle_trash_collision(
     mut commands: Commands,
+    mut typing_buffer: ResMut<TypingBuffer>,
     mut collision_events: EventReader<CollisionEvent>,
     mut trash_query: Query<Entity, With<TrashActive>>,
     walls_query: Query<Entity, With<Wall>>,
-    // mut trash_parents: Query<(&Parent, Entity), With<TrashText>>,
 ) {
     for collision_event in collision_events.read() {
         match collision_event {
             CollisionEvent::Started(entity1, entity2, _) => {
                 if let Ok(trash_entity) = trash_query.get_mut(*entity1) {
-                    println!("1 Collision started: {:?} {:?}", entity1, entity2);
                     match trash_query.get_mut(*entity2) {
                         Ok(_) => (),
                         Err(_) => {
                             match walls_query.get(*entity2) {
                                 Ok(_) => (),
-                                Err(_) => remove_trash_text(&mut commands, &trash_entity),
+                                Err(_) => {
+                                    remove_trash_text(&mut commands, &trash_entity);
+                                    typing_buffer.0 = "".to_string();
+                                },
                             }
-                            // commands.entity(trash_entity).remove::<TrashActive>();
-                            // let text_entity = match trash_parents.get_mut(*entity1) {
-                            //     Ok(entity) => entity.1,
-                            //     Err(_) => continue,
-                            // };
-                            // commands.entity(trash_entity).remove_children(&[text_entity]);
-                            // commands.entity(trash_entity).clear_children();
-                            // commands.entity(trash_entity).despawn_descendants();
                         }
                     };
                 } else if let Ok(trash_entity) = trash_query.get_mut(*entity2) {
-                    println!("2 Collision started: {:?} {:?}", entity1, entity2);
                     match walls_query.get(*entity1) {
                         Ok(_) => (),
-                        Err(_) => remove_trash_text(&mut commands, &trash_entity),
+                        Err(_) => {
+                            remove_trash_text(&mut commands, &trash_entity);
+                            typing_buffer.0 = "".to_string();
+                        },
                     }
-                    // remove_trash_text(&mut commands, &trash_entity);
-                    // commands.entity(trash_entity).remove::<TrashActive>();
-                    // let text_entity = match trash_parents.get_mut(*entity2) {
-                    //     Ok(entity) => entity.1,
-                    //     Err(_) => continue,
-                    // };
-                    // commands.entity(trash_entity).remove_children(&[text_entity]);
-                    // commands.entity(trash_entity).despawn_descendants();
                 }
             }
             CollisionEvent::Stopped(_entity1, _entity2, _) => {},
-            //     let trash_entity = match trash_parents.get_mut(*entity1) {
-            //         Ok(entity) => entity,
-            //         Err(_) => match trash_parents.get_mut(*entity2) {
-            //             Ok(entity) => entity,
-            //             Err(_) => continue,
-            //         }
-            //     };
-            //     println!("Collision stopped: {:?}", trash_entity);
-            // }
         }
     }
 }
