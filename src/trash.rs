@@ -1,4 +1,3 @@
-use crate::actions::Actions;
 use crate::loading::TextureAssets;
 use crate::GameState;
 use bevy::prelude::*;
@@ -7,6 +6,10 @@ use bevy::transform::TransformSystem;
 use bevy::utils::HashMap;
 use bevy_rapier2d::prelude::*;
 use rand::Rng;
+
+const BORDER_TILE_SIZE: f32 = 48.0;
+const BORDER_TILE_SCALE: Vec2 = Vec2::new(BORDER_TILE_SIZE, BORDER_TILE_SIZE);
+
 
 pub struct TrashPlugin;
 
@@ -104,7 +107,8 @@ fn spawn_trash(
         let max_x: f32 = window.width() / 2.0;
         let y_pos = window.height() / 2.0;
 
-        let random_x: f32 = random.gen_range(-max_x .. max_x);
+        let random_x: f32 = random.gen_range(-max_x + BORDER_TILE_SIZE .. max_x - BORDER_TILE_SIZE);
+        println!("Random x: {}", random_x);
         let trash_type: TrashType = SPAWN_CHANCES[random.gen_range(0..SPAWN_CHANCES.len())].clone();
 
         // TODO: make sure the same word doesn't appear twice in a row
@@ -253,38 +257,48 @@ fn setup(
 
 fn create_borders(commands: &mut Commands, textures: &Res<TextureAssets>, max_x: f32, max_y: f32) {
     let y_pos = (max_y * -1.0) + 16.0;
+    let x_pos = (max_x * -1.0) + 16.0;
+    let iterations_x = (max_x % BORDER_TILE_SIZE) + max_x;
+    let iterations_y = (max_y % BORDER_TILE_SIZE) + max_y;
 
-    for x in (0..=max_x as u32).step_by(48) {
-        println!("Spawning x: {} y: {}", x, max_y);
+    for x in (0..=iterations_x as u32).step_by(BORDER_TILE_SIZE as usize) {
         commands.spawn(
-            SpriteBundle {
-                sprite: Sprite {
-                    custom_size: Some(Vec2::new(48.0, 48.0)),
-                    ..default()
-                },
-                texture: textures.ground.clone(),
-                transform: Transform::from_translation(Vec3::new(x as f32, y_pos, 0.0)),
-                ..Default::default()
-            })
-            .insert(RigidBody::Fixed)
-            .insert(Collider::cuboid(32.0, 32.0)
-            // .insert(ColliderMassProperties::Mass(1.0)
-        );
+            get_border_tile(Vec3::new(x as f32, y_pos, 1.0), textures.ground.clone(), BORDER_TILE_SCALE.clone())
+        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
 
         commands.spawn(
-            SpriteBundle {
-                sprite: Sprite {
-                    custom_size: Some(Vec2::new(48.0, 48.0)),
-                    ..default()
-                },
-                texture: textures.ground.clone(),
-                transform: Transform::from_translation(Vec3::new(x as f32 * -1.0, y_pos, 0.0)),
-                ..Default::default()
-            })
-            .insert(RigidBody::Fixed)
-            .insert(Collider::cuboid(32.0, 32.0)
-            // .insert(ColliderMassProperties::Mass(1.0)
-        );
+            get_border_tile(Vec3::new(x as f32 * -1.0, y_pos, 1.0), textures.ground.clone(), BORDER_TILE_SCALE.clone())
+        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
+    }
+
+    for y in (0..=iterations_y as u32).step_by(BORDER_TILE_SIZE as usize) {
+        commands.spawn(
+            get_border_tile(Vec3::new(x_pos, y as f32, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
+        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
+
+        commands.spawn(
+            get_border_tile(Vec3::new(-x_pos, y as f32, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
+        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
+
+        commands.spawn(
+            get_border_tile(Vec3::new(x_pos, y as f32 * -1.0, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
+        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
+
+        commands.spawn(
+            get_border_tile(Vec3::new(-x_pos, y as f32 * -1.0, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
+        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
+    }
+}
+
+fn get_border_tile(position: Vec3, texture: Handle<Image>, texture_scale: Vec2) -> SpriteBundle {
+    SpriteBundle {
+        sprite: Sprite {
+            custom_size: Some(texture_scale),
+            ..default()
+        },
+        texture,
+        transform: Transform::from_translation(position),
+        ..Default::default()
     }
 }
 
@@ -297,6 +311,7 @@ fn update_buffer_text(
         text.sections[0].value = typing_buffer.0.clone();
     }
 }
+
 
 // https://github.com/bevyengine/bevy/issues/1780#issuecomment-1760929069
 fn fix_trash_label_rotation(
