@@ -1,6 +1,6 @@
 use crate::loading::TextureAssets;
 use crate::GameState;
-use crate::trash_text::{TrashTextBundle, TrashText};
+use crate::trash_text::{TrashText, TrashTextBundle, highlight_characters, remove_highlight};
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use bevy::transform::TransformSystem;
@@ -24,7 +24,7 @@ pub enum TrashType {
 #[derive(Component, Debug, Clone)]
 pub struct Trash {
     pub trash_type: TrashType,
-    pub word: String,
+    // pub word: String,
     pub size: Vec2,
 }
 
@@ -38,6 +38,9 @@ pub struct BufferText;
 struct TrashSpawnTimer(Timer);
 
 #[derive(Resource)]
+struct BufferTextDeleteTimer(Timer);
+
+#[derive(Resource)]
 pub struct TypingBuffer(String);
 
 #[derive(Resource)]
@@ -48,6 +51,7 @@ pub struct AvailableWords(HashMap<String, Vec<String>>);
 impl Plugin for TrashPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(TrashSpawnTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
+        // .insert_resource(BufferTextDeleteTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
         .insert_resource(TypingBuffer("".to_string()))
         .insert_resource(AvailableWords(get_available_words_from_file()))
         .add_systems(OnEnter(GameState::Playing), setup)
@@ -56,6 +60,7 @@ impl Plugin for TrashPlugin {
                 typing.run_if(in_state(GameState::Playing)),
                 destroy_matching_trash.after(typing),
                 update_buffer_text.after(typing),
+                highlight_character.after(typing),
             )
         )
         .add_systems(PostStartup, fix_trash_label_rotation.before(TransformSystem::TransformPropagate))
@@ -64,25 +69,23 @@ impl Plugin for TrashPlugin {
 }
 
 impl Trash {
-    pub fn get_by_type(trash_type: TrashType, word: String) -> Self {
+    pub fn get_by_type(trash_type: TrashType) -> Self {
         match trash_type {
-            TrashType::Bottle => Self::bottle(word),
-            TrashType::Pizza => Self::pizza(word),
+            TrashType::Bottle => Self::bottle(),
+            TrashType::Pizza => Self::pizza(),
         }
     }
 
-    pub fn bottle(word: String) -> Self {
+    pub fn bottle() -> Self {
         Self {
             trash_type: TrashType::Bottle,
-            word,
             size: Vec2::new(15.0, 16.0),
         }
     }
 
-    pub fn pizza(word: String) -> Self {
+    pub fn pizza() -> Self {
         Self {
             trash_type: TrashType::Pizza,
-            word,
             size: Vec2::new(32.0, 16.0),
         }
     }
@@ -116,13 +119,13 @@ fn spawn_trash(
         // A solution might be to have search to search for a word as long as it's not in a list of
         // already used words which we can get from a query
         // Also we need to be able to to limit the amount of letters in a word
-        let trash = Trash::get_by_type(trash_type, get_random_word(&available_words));
+        let trash = Trash::get_by_type(trash_type);
         //     trash_type,
         //     word: 
         // };
 
         println!("Spawning trash: {:?}", trash);
-        create_trash(&mut commands, &textures, trash, Vec2::new(random_x as f32, y_pos));
+        create_trash(&mut commands, &textures, trash, get_random_word(&available_words), Vec2::new(random_x as f32, y_pos));
     }
 
 
@@ -149,7 +152,7 @@ fn spawn_trash(
 }
 
 
-pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, trash: Trash, pos: Vec2) {
+pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, trash: Trash, word: String, pos: Vec2) {
     let sprite = get_trash_sprite(&trash.trash_type, textures);
     let mut transform = Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0));
     transform.scale = Vec3::new(1.5, 1.5, 1.5);
@@ -187,7 +190,7 @@ pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, tras
         .with_children(|parent| {
             parent.spawn(
                 TrashTextBundle::new(
-                    trash.word.clone(),
+                    word,
                     Anchor::Custom(Vec2::new(0.0, -2.0)),
                     Color::GREEN,
                     TextStyle {
@@ -341,11 +344,29 @@ fn fix_trash_label_rotation(
 fn typing(
     mut typing_buffer: ResMut<TypingBuffer>,
     keyboard_input: Res<Input<KeyCode>>,
+    // time: Res<Time>,
+    // mut delete_timer: ResMut<BufferTextDeleteTimer>,
 ) {
 
-    if keyboard_input.just_pressed(KeyCode::Back) || keyboard_input.pressed(KeyCode::Back) {
-        typing_buffer.0.pop();
+    if keyboard_input.pressed(KeyCode::ControlLeft) {
+        if keyboard_input.just_pressed(KeyCode::Back) {
+            typing_buffer.0 = "".to_string();
+            return
+        }
     }
+
+    if keyboard_input.just_pressed(KeyCode::Back) {
+        typing_buffer.0.pop();
+        return
+    }
+
+
+
+    // if keyboard_input.pressed(KeyCode::Back) {
+    //     if delete_timer.0.tick(time.delta()).just_finished() {
+    //         typing_buffer.0.pop();
+    //     }
+    // }
 
 
     for key in keyboard_input.get_just_pressed() {
@@ -381,10 +402,30 @@ fn typing(
     }
 }
 
+fn highlight_character(
+    mut trash_query: Query<(&TrashText, &mut Text)>,
+    typing_buffer: Res<TypingBuffer>,
+) {
+    for (trash_text, mut ui_text) in &mut trash_query.iter_mut() {
+        if trash_text.word.starts_with(&typing_buffer.0) {
+            ui_text.sections = highlight_characters(&ui_text.sections, typing_buffer.0.len(), trash_text.highlight_color)
+            // trash_text.highlight_characters(typing_buffer.0.len());
+        } else {
+            ui_text.sections = remove_highlight(&ui_text.sections, trash_text.color)
+            // trash_text.remove_highlight();
+        }
+        // let mut highlighted_characters: Vec<bool> = Vec::new();
+        // for character in characters.iter() {
+        //     highlighted_characters.push(typing_buffer.0.contains(character));
+        // }
+        // trash_text.text = characters;
+    }
+}
+
 
 fn destroy_matching_trash(
     mut commands: Commands,
-    trash_query: Query<(Entity, &Trash)>,
+    trash_query: Query<(&Parent, &TrashText)>,
     mut typing_buffer: ResMut<TypingBuffer>,
 ) {
 
@@ -392,14 +433,14 @@ fn destroy_matching_trash(
         return;
     }
 
-    let mut trash_to_destroy: Vec<Entity> = Vec::new();
-    for (entity, trash) in &mut trash_query.iter() {
-        if typing_buffer.0 == trash.word {
+    let mut trash_to_destroy: Vec<&Parent> = Vec::new();
+    for (entity, trash_text) in &mut trash_query.iter() {
+        if typing_buffer.0 == trash_text.word {
             trash_to_destroy.push(entity);
         }
     }
     for entity in &trash_to_destroy {
-        commands.entity(*entity).despawn_recursive();
+        commands.entity(entity.get()).despawn_recursive();
     }
 
     if trash_to_destroy.len() > 0 {
