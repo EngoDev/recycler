@@ -298,6 +298,7 @@ fn update_buffer_text(
     }
 }
 
+// https://github.com/bevyengine/bevy/issues/1780#issuecomment-1760929069
 fn fix_trash_label_rotation(
     mut text_query: Query<(&Parent, &mut Transform), With<TrashLabel>>,
     query_parents: Query<&Transform, (With<Trash>, Without<TrashLabel>)>,
@@ -307,10 +308,6 @@ fn fix_trash_label_rotation(
             transform.rotation = parent_transform.rotation.inverse();
         }
     }
-    // for (parent, mut transform) in &mut text_query.iter() {
-    //     let parent_transform = query_parents.get(parent.).unwrap();
-    //     transform.rotation = parent_transform.rotation;
-    // }
 }
 
 
