@@ -1,14 +1,6 @@
-use crate::loading::TextureAssets;
-use crate::GameState;
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
-use bevy::transform::TransformSystem;
-use bevy::utils::HashMap;
-use bevy_rapier2d::prelude::*;
-use rand::Rng;
 
-
-const FONT_SIZE: f32 = 100.0;
 
 // pub struct TrashTextPlugin;
 

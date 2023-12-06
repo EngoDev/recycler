@@ -451,15 +451,14 @@ fn destroy_matching_trash(
 
 fn get_random_word(available_words: &Res<AvailableWords>) -> String {
     let mut random = rand::thread_rng();
-    let mut random_word: String = String::new();
-    let mut random_letter: String = String::new();
     let mut random_words: Vec<String> = Vec::new();
+
     while random_words.len() == 0 {
-        random_letter = random.gen_range('a' .. 'z').to_string();
+        let random_letter = random.gen_range('a' .. 'z').to_string();
         random_words = available_words.0.get(random_letter.as_str()).unwrap().clone();
     }
-    random_word = random_words[random.gen_range(0..random_words.len())].clone();
-    return random_word;
+
+    random_words[random.gen_range(0..random_words.len())].clone()
 }
 
 
