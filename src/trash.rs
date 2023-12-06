@@ -24,12 +24,18 @@ pub enum TrashType {
 #[derive(Component, Debug, Clone)]
 pub struct Trash {
     pub trash_type: TrashType,
-    // pub word: String,
     pub size: Vec2,
 }
 
 #[derive(Component, Debug, Clone)]
 pub struct BufferText;
+
+
+#[derive(Component)]
+pub struct TrashActive;
+
+#[derive(Component)]
+pub struct Wall;
 
 // #[derive(Component, Debug, Clone)]
 // pub struct TrashLabel;
@@ -57,6 +63,7 @@ impl Plugin for TrashPlugin {
         .add_systems(OnEnter(GameState::Playing), setup)
         .add_systems(Update, (
                 spawn_trash.run_if(in_state(GameState::Playing)),
+                handle_trash_collision.before(typing),
                 typing.run_if(in_state(GameState::Playing)),
                 destroy_matching_trash.after(typing),
                 update_buffer_text.after(typing),
@@ -186,6 +193,8 @@ pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, tras
         .insert(Collider::cuboid(trash.size.x, trash.size.y))
         .insert(ColliderMassProperties::Mass(1.0))
         .insert(Restitution::coefficient(0.7))
+        .insert(ActiveEvents::COLLISION_EVENTS)
+        .insert(TrashActive)
         .insert(trash.clone())
         .with_children(|parent| {
             parent.spawn(
@@ -289,19 +298,27 @@ fn create_borders(commands: &mut Commands, textures: &Res<TextureAssets>, max_x:
     for y in (0..=iterations_y as u32).step_by(BORDER_TILE_SIZE as usize) {
         commands.spawn(
             get_border_tile(Vec3::new(x_pos, y as f32, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
-        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
+        )
+        .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
+        .insert(Wall);
 
         commands.spawn(
             get_border_tile(Vec3::new(-x_pos, y as f32, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
-        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
+        )
+        .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
+        .insert(Wall);
 
         commands.spawn(
             get_border_tile(Vec3::new(x_pos, y as f32 * -1.0, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
-        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
+        )
+        .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
+        .insert(Wall);
 
         commands.spawn(
             get_border_tile(Vec3::new(-x_pos, y as f32 * -1.0, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
-        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
+        )
+        .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
+        .insert(Wall);
     }
 }
 
@@ -331,7 +348,7 @@ fn update_buffer_text(
 // https://github.com/bevyengine/bevy/issues/1780#issuecomment-1760929069
 fn fix_trash_label_rotation(
     mut text_query: Query<(&Parent, &mut Transform), With<TrashText>>,
-    query_parents: Query<&Transform, (With<Trash>, Without<TrashText>)>,
+    query_parents: Query<&Transform, (With<Trash>, Without<TrashText>, With<TrashActive>)>,
 ) {
     for (parent, mut transform) in text_query.iter_mut() {
         if let Ok(parent_transform) = query_parents.get(parent.get()) {
@@ -422,6 +439,70 @@ fn highlight_character(
     }
 }
 
+fn remove_trash_text(commands: &mut Commands, trash_entity: &Entity) {
+    commands.entity(*trash_entity).remove::<TrashActive>();
+    commands.entity(*trash_entity).despawn_descendants();
+}
+
+fn handle_trash_collision(
+    mut commands: Commands,
+    mut collision_events: EventReader<CollisionEvent>,
+    mut trash_query: Query<Entity, With<TrashActive>>,
+    walls_query: Query<Entity, With<Wall>>,
+    // mut trash_parents: Query<(&Parent, Entity), With<TrashText>>,
+) {
+    for collision_event in collision_events.read() {
+        match collision_event {
+            CollisionEvent::Started(entity1, entity2, _) => {
+                if let Ok(trash_entity) = trash_query.get_mut(*entity1) {
+                    println!("1 Collision started: {:?} {:?}", entity1, entity2);
+                    match trash_query.get_mut(*entity2) {
+                        Ok(_) => (),
+                        Err(_) => {
+                            match walls_query.get(*entity2) {
+                                Ok(_) => (),
+                                Err(_) => remove_trash_text(&mut commands, &trash_entity),
+                            }
+                            // commands.entity(trash_entity).remove::<TrashActive>();
+                            // let text_entity = match trash_parents.get_mut(*entity1) {
+                            //     Ok(entity) => entity.1,
+                            //     Err(_) => continue,
+                            // };
+                            // commands.entity(trash_entity).remove_children(&[text_entity]);
+                            // commands.entity(trash_entity).clear_children();
+                            // commands.entity(trash_entity).despawn_descendants();
+                        }
+                    };
+                } else if let Ok(trash_entity) = trash_query.get_mut(*entity2) {
+                    println!("2 Collision started: {:?} {:?}", entity1, entity2);
+                    match walls_query.get(*entity1) {
+                        Ok(_) => (),
+                        Err(_) => remove_trash_text(&mut commands, &trash_entity),
+                    }
+                    // remove_trash_text(&mut commands, &trash_entity);
+                    // commands.entity(trash_entity).remove::<TrashActive>();
+                    // let text_entity = match trash_parents.get_mut(*entity2) {
+                    //     Ok(entity) => entity.1,
+                    //     Err(_) => continue,
+                    // };
+                    // commands.entity(trash_entity).remove_children(&[text_entity]);
+                    // commands.entity(trash_entity).despawn_descendants();
+                }
+            }
+            CollisionEvent::Stopped(_entity1, _entity2, _) => {},
+            //     let trash_entity = match trash_parents.get_mut(*entity1) {
+            //         Ok(entity) => entity,
+            //         Err(_) => match trash_parents.get_mut(*entity2) {
+            //             Ok(entity) => entity,
+            //             Err(_) => continue,
+            //         }
+            //     };
+            //     println!("Collision stopped: {:?}", trash_entity);
+            // }
+        }
+    }
+}
+
 
 fn destroy_matching_trash(
     mut commands: Commands,
@@ -463,7 +544,7 @@ fn get_random_word(available_words: &Res<AvailableWords>) -> String {
 
 
 fn get_available_words_from_file() -> HashMap<String, Vec<String>> {
-    let words: Vec<&str> = include_str!("../assets/words.txt").split("\n").collect();
+    let words: Vec<&str> = include_str!("../assets/easy.txt").split("\n").collect();
 
     let mut serialized_words: HashMap<String, Vec<String>>  = HashMap::from([
         ("a".to_string(), Vec::new()),
