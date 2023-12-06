@@ -383,35 +383,35 @@ fn fix_trash_label_rotation(
 }
 
 
+fn remove_all_marked_trash(
+    mut commands: Commands,
+    marked_trash_query: Query<Entity, With<TrashMarked>>,
+) {
+    for entity in &mut marked_trash_query.iter() {
+        commands.entity(entity).remove::<TrashMarked>();
+    }
+}
+
 fn typing(
     mut commands: Commands,
     mut typing_buffer: ResMut<TypingBuffer>,
     keyboard_input: Res<Input<KeyCode>>,
     trash_query: Query<(&Parent, &TrashText)>,
     marked_trash_query: Query<Entity, With<TrashMarked>>,
-    // time: Res<Time>,
-    // mut delete_timer: ResMut<BufferTextDeleteTimer>,
 ) {
 
     if keyboard_input.pressed(KeyCode::ControlLeft) {
         if keyboard_input.just_pressed(KeyCode::Back) {
             typing_buffer.0 = "".to_string();
+            remove_all_marked_trash(commands, marked_trash_query);
             return
         }
     }
 
-    if keyboard_input.just_pressed(KeyCode::Back) {
-        typing_buffer.0.pop();
-        return
-    }
-
-
-
-    // if keyboard_input.pressed(KeyCode::Back) {
-    //     if delete_timer.0.tick(time.delta()).just_finished() {
-    //         typing_buffer.0.pop();
-    //     }
+    // if keyboard_input.just_pressed(KeyCode::Back) {
+    //     typing_buffer.0.pop();
     // }
+
 
     let mut buffer_word = typing_buffer.0.clone();
 
@@ -443,13 +443,10 @@ fn typing(
             KeyCode::X => buffer_word.push('x'),
             KeyCode::Y => buffer_word.push('y'),
             KeyCode::Z => buffer_word.push('z'),
+            KeyCode::Back => { let _ = buffer_word.pop(); },
             _ => {}
         }
     }
-
-    // if typing_buffer.0.len() == 0 {
-    //     typing_buffer.0 = buffer_word.clone();
-    // }
 
 
     let mut to_be_removed = vec![];
@@ -459,10 +456,8 @@ fn typing(
         if trash_text.word.starts_with(&buffer_word) {
             if marked_trash_query.get(parent.get()).is_err() {
                 commands.entity(parent.get()).insert(TrashMarked);
-                // commands.entity(parent.get()).remove::<TrashMarked>();
             }
             is_existing_matching_word = true;
-            // ui_text.sections = highlight_characters(&ui_text.sections, typing_buffer.0.len(), trash_text.highlight_color)
         } else {
             if marked_trash_query.get(parent.get()).is_ok() {
                 to_be_removed.push(parent.get());
@@ -477,15 +472,8 @@ fn typing(
     for entity in to_be_removed {
         commands.entity(entity).remove::<TrashMarked>();
     }
-    // for possible_match in possible_matches {
-    //     if possible_match.1.word.starts_with(&buffer_word) {
-    //         typing_buffer.0 = buffer_word;
-    //         return
-    //     } else {
-    //         commands.entity(possible_match.0.get()).remove::<TrashMarked>();
-    //     }
-    // }
 }
+
 
 fn highlight_character(
     mut trash_query: Query<(&TrashText, &mut Text)>,
