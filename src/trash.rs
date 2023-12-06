@@ -408,11 +408,6 @@ fn typing(
         }
     }
 
-    // if keyboard_input.just_pressed(KeyCode::Back) {
-    //     typing_buffer.0.pop();
-    // }
-
-
     let mut buffer_word = typing_buffer.0.clone();
 
     for key in keyboard_input.get_just_pressed() {
