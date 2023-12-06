@@ -7,6 +7,7 @@ mod menu;
 mod player;
 mod trash;
 mod typing;
+mod trash_text;
 
 use crate::actions::ActionsPlugin;
 use crate::audio::InternalAudioPlugin;

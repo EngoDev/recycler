@@ -1,5 +1,6 @@
 use crate::loading::TextureAssets;
 use crate::GameState;
+use crate::trash_text::{TrashTextBundle, TrashText};
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use bevy::transform::TransformSystem;
@@ -30,8 +31,8 @@ pub struct Trash {
 #[derive(Component, Debug, Clone)]
 pub struct BufferText;
 
-#[derive(Component, Debug, Clone)]
-pub struct TrashLabel;
+// #[derive(Component, Debug, Clone)]
+// pub struct TrashLabel;
 
 #[derive(Resource)]
 struct TrashSpawnTimer(Timer);
@@ -185,20 +186,31 @@ pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, tras
         .insert(trash.clone())
         .with_children(|parent| {
             parent.spawn(
-                Text2dBundle {
-                text: Text::from_section(trash.word.clone(), TextStyle {
-                    color: Color::WHITE,
-                    font_size: 20.0,
-                    ..default()
-
-                }),//.with_alignment(TextAlignment::Center),
-                // transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 1.0)),
-                // transform: transform.clone(),
-                // Custom anchor point. Top left is `(-0.5, 0.5)`, center is `(0.0, 0.0)`. The value will
-                text_anchor: Anchor::Custom(Vec2::new(0.0, -2.0)),
-                ..default()
-            })
-            .insert(TrashLabel);
+                TrashTextBundle::new(
+                    trash.word.clone(),
+                    Anchor::Custom(Vec2::new(0.0, -2.0)),
+                    Color::GREEN,
+                    TextStyle {
+                        color: Color::WHITE,
+                        font_size: 20.0,
+                        ..default()
+                    }
+                )
+            );
+                // Text2dBundle {
+                // text: Text::from_section(trash.word.clone(), TextStyle {
+                //     color: Color::WHITE,
+                //     font_size: 20.0,
+                //     ..default()
+                //
+                // }),//.with_alignment(TextAlignment::Center),
+                // // transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 1.0)),
+                // // transform: transform.clone(),
+                // // Custom anchor point. Top left is `(-0.5, 0.5)`, center is `(0.0, 0.0)`. The value will
+                // text_anchor: Anchor::Custom(Vec2::new(0.0, -2.0)),
+                // ..default()
+            // })
+            // .insert(TrashLabel));
         });
         // .id();
         // .insert(trash)
@@ -315,8 +327,8 @@ fn update_buffer_text(
 
 // https://github.com/bevyengine/bevy/issues/1780#issuecomment-1760929069
 fn fix_trash_label_rotation(
-    mut text_query: Query<(&Parent, &mut Transform), With<TrashLabel>>,
-    query_parents: Query<&Transform, (With<Trash>, Without<TrashLabel>)>,
+    mut text_query: Query<(&Parent, &mut Transform), With<TrashText>>,
+    query_parents: Query<&Transform, (With<Trash>, Without<TrashText>)>,
 ) {
     for (parent, mut transform) in text_query.iter_mut() {
         if let Ok(parent_transform) = query_parents.get(parent.get()) {
@@ -375,6 +387,11 @@ fn destroy_matching_trash(
     trash_query: Query<(Entity, &Trash)>,
     mut typing_buffer: ResMut<TypingBuffer>,
 ) {
+
+    if !typing_buffer.is_changed() {
+        return;
+    }
+
     let mut trash_to_destroy: Vec<Entity> = Vec::new();
     for (entity, trash) in &mut trash_query.iter() {
         if typing_buffer.0 == trash.word {
