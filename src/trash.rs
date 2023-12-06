@@ -3,6 +3,7 @@ use crate::loading::TextureAssets;
 use crate::GameState;
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
+use bevy::transform::TransformSystem;
 use bevy::utils::HashMap;
 use bevy_rapier2d::prelude::*;
 use rand::Rng;
@@ -25,6 +26,9 @@ pub struct Trash {
 
 #[derive(Component, Debug, Clone)]
 pub struct BufferText;
+
+#[derive(Component, Debug, Clone)]
+pub struct TrashLabel;
 
 #[derive(Resource)]
 struct TrashSpawnTimer(Timer);
@@ -49,7 +53,9 @@ impl Plugin for TrashPlugin {
                 destroy_matching_trash.after(typing),
                 update_buffer_text.after(typing),
             )
-        );
+        )
+        .add_systems(PostStartup, fix_trash_label_rotation.before(TransformSystem::TransformPropagate))
+        .add_systems(PostUpdate, fix_trash_label_rotation.before(TransformSystem::TransformPropagate));
     }
 }
 
@@ -144,39 +150,62 @@ pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, tras
     transform.scale = Vec3::new(1.5, 1.5, 1.5);
     transform.rotation = Quat::from_rotation_y(30.0);
 
-    let text = commands.spawn(Text2dBundle {
-            text: Text::from_section(trash.word.clone(), TextStyle {
-                color: Color::WHITE,
-                font_size: 20.0,
-                ..default()
+    // let text = commands.spawn(Text2dBundle {
+    //         text: Text::from_section(trash.word.clone(), TextStyle {
+    //             color: Color::WHITE,
+    //             font_size: 20.0,
+    //             ..default()
+    //
+    //         }),//.with_alignment(TextAlignment::Center),
+    //         // transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 1.0)),
+    //         // transform: transform.clone(),
+    //         // Custom anchor point. Top left is `(-0.5, 0.5)`, center is `(0.0, 0.0)`. The value will
+    //         text_anchor: Anchor::Custom(Vec2::new(0.0, -2.0)),
+    //         ..default()
+    //     })
+    //     // .insert(RigidBody::Fixed)
+    //     .id();
 
-            }),//.with_alignment(TextAlignment::Center),
-            // transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 1.0)),
-            // transform: transform.clone(),
-            // Custom anchor point. Top left is `(-0.5, 0.5)`, center is `(0.0, 0.0)`. The value will
-            text_anchor: Anchor::Custom(Vec2::new(0.0, -2.0)),
-            ..default()
-        })
-        // .insert(RigidBody::Fixed)
-        .id();
-
-    let sprite = commands
+    commands
         .spawn(SpriteBundle {
             texture: sprite,
             // transform: transform.clone(), // Transform::from_scale(Vec3::new(1.5, 1.5, 1.5)), //transform.clone(),
             ..default()
         })
         // .insert(Velocity::angular(3.0))
-        .id();
-        // .insert(trash)
-        // .add_child(text);
-    commands.spawn(trash.clone())
         .insert(Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)))
         .insert(RigidBody::Dynamic)
         .insert(Collider::cuboid(trash.size.x, trash.size.y))
         .insert(ColliderMassProperties::Mass(1.0))
-        .add_child(sprite)
-        .add_child(text);
+        .insert(Restitution::coefficient(0.7))
+        .insert(trash.clone())
+        .with_children(|parent| {
+            parent.spawn(
+                Text2dBundle {
+                text: Text::from_section(trash.word.clone(), TextStyle {
+                    color: Color::WHITE,
+                    font_size: 20.0,
+                    ..default()
+
+                }),//.with_alignment(TextAlignment::Center),
+                // transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 1.0)),
+                // transform: transform.clone(),
+                // Custom anchor point. Top left is `(-0.5, 0.5)`, center is `(0.0, 0.0)`. The value will
+                text_anchor: Anchor::Custom(Vec2::new(0.0, -2.0)),
+                ..default()
+            })
+            .insert(TrashLabel);
+        });
+        // .id();
+        // .insert(trash)
+        // .add_child(text);
+    // commands.spawn(trash.clone())
+    //     .insert(Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)))
+    //     .insert(RigidBody::Dynamic)
+    //     .insert(Collider::cuboid(trash.size.x, trash.size.y))
+    //     .insert(ColliderMassProperties::Mass(1.0))
+    //     .add_child(sprite)
+    //     .add_child(text);
 }
 
 
@@ -186,25 +215,6 @@ fn get_trash_sprite(trash_type: &TrashType, textures: &Res<TextureAssets>) -> Ha
         TrashType::Pizza => textures.pizza.clone(),
     }
 }
-//
-// fn move_player(
-//     time: Res<Time>,
-//     actions: Res<Actions>,
-//     mut player_query: Query<&mut Transform, With<Player>>,
-// ) {
-//     if actions.player_movement.is_none() {
-//         return;
-//     }
-//     let speed = 150.;
-//     let movement = Vec3::new(
-//         actions.player_movement.unwrap().x * speed * time.delta_seconds(),
-//         actions.player_movement.unwrap().y * speed * time.delta_seconds(),
-//         0.,
-//     );
-//     for mut player_transform in &mut player_query {
-//         player_transform.translation += movement;
-//     }
-// }
 
 fn setup(
     mut commands: Commands,
@@ -287,6 +297,22 @@ fn update_buffer_text(
         text.sections[0].value = typing_buffer.0.clone();
     }
 }
+
+fn fix_trash_label_rotation(
+    mut text_query: Query<(&Parent, &mut Transform), With<TrashLabel>>,
+    query_parents: Query<&Transform, (With<Trash>, Without<TrashLabel>)>,
+) {
+    for (parent, mut transform) in text_query.iter_mut() {
+        if let Ok(parent_transform) = query_parents.get(parent.get()) {
+            transform.rotation = parent_transform.rotation.inverse();
+        }
+    }
+    // for (parent, mut transform) in &mut text_query.iter() {
+    //     let parent_transform = query_parents.get(parent.).unwrap();
+    //     transform.rotation = parent_transform.rotation;
+    // }
+}
+
 
 fn typing(
     mut typing_buffer: ResMut<TypingBuffer>,
