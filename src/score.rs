@@ -55,7 +55,6 @@ fn setup(
 }
 
 
-
 fn update_score(
     score: Res<Score>,
     mut query: Query<&mut Text, With<ScoreMarker>>,

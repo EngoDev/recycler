@@ -120,7 +120,7 @@ fn spawn_trash(
 
         let mut random = rand::thread_rng();
         let max_x: f32 = window.width() / 2.0;
-        let y_pos = window.height() / 2.0;
+        let y_pos = (window.height() / 2.0) * 2.0;
 
         let random_x: f32 = random.gen_range(-max_x + BORDER_TILE_SIZE .. max_x - BORDER_TILE_SIZE);
         println!("Random x: {}", random_x);
@@ -266,33 +266,33 @@ fn setup(
     //     })
     //     .with_children(|parent| {
 
-    commands.spawn((
-        TextBundle::from_section(
-            typing_buffer.0.clone(),
-            TextStyle {
-                font_size: 50.0,
-                ..default()
-            }
-        )
-        // .with_text_alignment(TextAlignment::Center)
-        .with_style(Style {
-                // align_self: AlignSelf::FlexEnd,
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                position_type: PositionType::Absolute,
-                top: Val::Percent(50.0),
-                left: Val::Percent(50.0),
-                max_width: Val::Px(200.0),
-                max_height: Val::Percent(100.0),
-                flex_wrap: FlexWrap::WrapReverse,
-                // flex_wrap: FlexWrap::Wrap,
-                // bottom: Val::Px(5.0),
-                // right: Val::Px(5.0),
-                ..default()
-            }),
-        BufferText,
-        )
-    );
+    // commands.spawn((
+    //     TextBundle::from_section(
+    //         typing_buffer.0.clone(),
+    //         TextStyle {
+    //             font_size: 50.0,
+    //             ..default()
+    //         }
+    //     )
+    //     // .with_text_alignment(TextAlignment::Center)
+    //     .with_style(Style {
+    //             // align_self: AlignSelf::FlexEnd,
+    //             flex_direction: FlexDirection::Row,
+    //             align_items: AlignItems::Center,
+    //             position_type: PositionType::Absolute,
+    //             top: Val::Percent(50.0),
+    //             left: Val::Percent(50.0),
+    //             max_width: Val::Px(200.0),
+    //             max_height: Val::Percent(100.0),
+    //             flex_wrap: FlexWrap::WrapReverse,
+    //             // flex_wrap: FlexWrap::Wrap,
+    //             // bottom: Val::Px(5.0),
+    //             // right: Val::Px(5.0),
+    //             ..default()
+    //         }),
+    //     BufferText,
+    //     )
+    // );
 
     // });
 
@@ -326,45 +326,45 @@ fn create_borders(commands: &mut Commands, textures: &Res<TextureAssets>, max_x:
             get_border_tile(Vec3::new(x_pos, y as f32, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
         )
         .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
-        .insert(Wall)
-        .with_children(|parent| {
-            parent.spawn(
-                Text2dBundle {
-                    text: Text::from_section(
-                            format!("Position: {:?}", (x_pos, y)),
-                            TextStyle {
-                                font_size: 20.0,
-                                color: Color::RED,
-                                ..default()
-                            }
-                        ),
-                    // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
-                    ..default()
-                }
-            );
-        });
+        .insert(Wall);
+        // .with_children(|parent| {
+        //     parent.spawn(
+        //         Text2dBundle {
+        //             text: Text::from_section(
+        //                     format!("Position: {:?}", (x_pos, y)),
+        //                     TextStyle {
+        //                         font_size: 20.0,
+        //                         color: Color::RED,
+        //                         ..default()
+        //                     }
+        //                 ),
+        //             // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
+        //             ..default()
+        //         }
+        //     );
+        // });
 
         commands.spawn(
             get_border_tile(Vec3::new(-x_pos, y as f32, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
         )
         .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
-        .insert(Wall)
-        .with_children(|parent| {
-            parent.spawn(
-                Text2dBundle {
-                    text: Text::from_section(
-                            format!("Position: {:?}", (-x_pos, y)),
-                            TextStyle {
-                                font_size: 20.0,
-                                color: Color::RED,
-                                ..default()
-                            }
-                        ),
-                    // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
-                    ..default()
-                }
-            );
-        });
+        .insert(Wall);
+        // .with_children(|parent| {
+        //     parent.spawn(
+        //         Text2dBundle {
+        //             text: Text::from_section(
+        //                     format!("Position: {:?}", (-x_pos, y)),
+        //                     TextStyle {
+        //                         font_size: 20.0,
+        //                         color: Color::RED,
+        //                         ..default()
+        //                     }
+        //                 ),
+        //             // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
+        //             ..default()
+        //         }
+        //     );
+        // });
 
     //     commands.spawn(
     //         get_border_tile(Vec3::new(x_pos, y as f32 * -1.0, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
