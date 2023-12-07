@@ -22,22 +22,37 @@ const TRASH_SPAWN_DISTANCE_BETWEEN_SPAWNS: f32 = 30.0;
 
 pub struct TrashPlugin;
 
-#[derive(Clone, Debug, Reflect)]
+#[derive(Clone, Debug)]
 pub enum TrashType {
     Bottle,
     Pizza
 }
+
 impl Default for TrashType {
     fn default() -> Self {
         Self::Bottle
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum PowerUp {
+    None,
+    Explosion,
+    Link
+}
 
-#[derive(Component, Debug, Clone, Reflect)]
-#[reflect(Component)]
+impl Default for PowerUp {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+
+
+#[derive(Component, Debug, Clone)]
 pub struct Trash {
     pub trash_type: TrashType,
+    pub power_up: PowerUp,
     pub size: Vec2,
 }
 
@@ -48,29 +63,23 @@ impl Default for Trash {
 }
 
 
-#[derive(Component, Debug, Clone, Default, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct BufferText;
 
 
-#[derive(Component, Default, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Default)]
 pub struct TrashActionActive;
 
-#[derive(Component, Default, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Default)]
 pub struct TrashActionDuplicate;
 
-#[derive(Component, Default, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Default)]
 pub struct TrashMarked;
 
-#[derive(Component, Default, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Default)]
 pub struct Wall;
 
-#[derive(Component, Default, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Default)]
 pub struct Floor;
 
 // #[derive(Component, Debug, Clone)]
@@ -179,6 +188,7 @@ impl Plugin for TrashPlugin {
         .add_systems(OnEnter(GameState::Playing), setup)
         .add_systems(Update, (
                 spawn_trash.run_if(in_state(GameState::Playing)),
+                trash_power_ups_effects.after(spawn_trash),
                 update_difficuly.after(setup),
                 // destroy_trash_text.after(handle_trash_collision),
                 handle_trash_collision.after(setup),
@@ -206,6 +216,7 @@ impl Trash {
         Self {
             trash_type: TrashType::Bottle,
             size: Vec2::new(15.0, 16.0),
+            power_up: PowerUp::None,
         }
     }
 
@@ -213,6 +224,7 @@ impl Trash {
         Self {
             trash_type: TrashType::Pizza,
             size: Vec2::new(32.0, 16.0),
+            power_up: PowerUp::None,
         }
     }
 }
@@ -244,6 +256,11 @@ fn spawn_trash(
 ) {
 
     static SPAWN_CHANCES: [TrashType; 2] = [TrashType::Bottle, TrashType::Pizza];
+    static POWER_UP_CHANCES: [PowerUp; 1] = [
+        // PowerUp::None,
+        PowerUp::Explosion,
+        // PowerUp::Link
+    ];
 
     if spawn_timer.0.tick(time.delta()).just_finished() {
         let window = window.single();
@@ -257,14 +274,19 @@ fn spawn_trash(
         *previous_spawn_position = random_x;
         // println!("Random x: {}", random_x);
         let trash_type: TrashType = SPAWN_CHANCES[random.gen_range(0..SPAWN_CHANCES.len())].clone();
+        let power_up: PowerUp = POWER_UP_CHANCES[random.gen_range(0..POWER_UP_CHANCES.len())].clone();
 
         // TODO: make sure the same word doesn't appear twice in a row
         // A solution might be to have search to search for a word as long as it's not in a list of
         // already used words which we can get from a query
         // Also we need to be able to to limit the amount of letters in a word
-        let trash = Trash::get_by_type(trash_type);
+        let mut trash = Trash::get_by_type(trash_type);
+        if power_up != PowerUp::None {
+            trash.power_up = power_up;
+            // trash.size = Vec2::new(32.0, 32.0);
+        }
 
-        // println!("Spawning trash: {:?}", trash);
+        println!("Spawning trash: {:?}", trash);
         let trash_bundle = TrashBundle::new(get_trash_sprite(&trash.trash_type, &textures), trash);
         let trash_text = TrashBundle::create_text(
             get_random_word(&available_words),
@@ -467,66 +489,6 @@ fn create_borders(commands: &mut Commands, textures: &Res<TextureAssets>, max_x:
         )
         .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
         .insert(Wall);
-        // .with_children(|parent| {
-        //     parent.spawn(
-        //         Text2dBundle {
-        //             text: Text::from_section(
-        //                     format!("Position: {:?}", (-x_pos, y)),
-        //                     TextStyle {
-        //                         font_size: 20.0,
-        //                         color: Color::RED,
-        //                         ..default()
-        //                     }
-        //                 ),
-        //             // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
-        //             ..default()
-        //         }
-        //     );
-        // });
-
-    //     commands.spawn(
-    //         get_border_tile(Vec3::new(x_pos, y as f32 * -1.0, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
-    //     )
-    //     .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
-    //     .insert(Wall)
-    //     .with_children(|parent| {
-    //         parent.spawn(
-    //             Text2dBundle {
-    //                 text: Text::from_section(
-    //                         format!("Position: {:?}", (x_pos, y as f32 * -1.0)),
-    //                         TextStyle {
-    //                             font_size: 20.0,
-    //                             color: Color::RED,
-    //                             ..default()
-    //                         }
-    //                     ),
-    //                 // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
-    //                 ..default()
-    //             }
-    //         );
-    //     });
-    //
-    //     commands.spawn(
-    //         get_border_tile(Vec3::new(-x_pos, y as f32 * -1.0, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
-    //     )
-    //     .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
-    //     .insert(Wall)
-    //     .with_children(|parent| {
-    //         parent.spawn(
-    //             Text2dBundle {
-    //                 text: Text::from_section(
-    //                         format!("Position: {:?}", (-x_pos, y as f32 * -1.0)),
-    //                         TextStyle {
-    //                             font_size: 20.0,
-    //                             color: Color::RED,
-    //                             ..default()
-    //                         }
-    //                     ),
-    //                 // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
-    //                 ..default()
-    //             }
-    //         );
-    //     });
     }
 }
 
@@ -574,6 +536,49 @@ fn remove_all_marked_trash(
         commands.entity(entity).remove::<TrashMarked>();
     }
 }
+
+fn trash_power_ups_effects(
+    mut active_trash_query: Query<(&Trash, &mut Sprite), With<TrashActionActive>>,
+    mut inactive_trash_query: Query<&mut Sprite, Without<TrashActionActive>>,
+    time: Res<Time>,
+) {
+    let seconds = time.elapsed_seconds();
+    let color_change_interval = (3.5 * seconds).sin() / 2.0 + 0.5;
+    // let explosion_color = (3.5 * seconds).sin() / 2.0 + 0.5;
+
+    for (trash, mut sprite) in &mut active_trash_query.iter_mut() {
+        match trash.power_up {
+            PowerUp::Explosion => {
+                sprite.color = Color::rgb(
+                    1.0,
+                    color_change_interval,
+                    color_change_interval
+                );
+            },
+            PowerUp::Link => {
+                sprite.color = Color::rgb(
+                    color_change_interval,
+                    color_change_interval,
+                    1.0,
+                );
+                // println!("Link power up");
+                // commands.entity(entity).remove::<TrashActionActive>();
+                // commands.entity(entity).remove::<TrashMarked>();
+                // commands.entity(entity).despawn_descendants();
+                // commands.entity(entity).insert(TrashActionDuplicate);
+            },
+            _ => {}
+        }
+        // commands.entity(entity).remove::<TrashMarked>();
+    }
+
+    for mut sprite in &mut inactive_trash_query.iter_mut() {
+        if sprite.color != Color::WHITE {
+            sprite.color = Color::WHITE;
+        }
+    }
+}
+
 
 fn typing(
     mut commands: Commands,
