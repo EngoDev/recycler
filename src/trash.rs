@@ -17,7 +17,7 @@ const BORDER_TILE_SIZE: f32 = 48.0;
 const BORDER_TILE_SCALE: Vec2 = Vec2::new(BORDER_TILE_SIZE, BORDER_TILE_SIZE);
 
 const TRASH_STARTING_VELOCITY: Vec2 = Vec2::new(0.0, -100.0);
-const TRASH_MAXIMUM_VELOCITY_LENGTH: f32 = 100.0;
+const TRASH_MAXIMUM_VELOCITY_LENGTH: f32 = 140.0;
 const TRASH_SPAWN_DISTANCE_BETWEEN_SPAWNS: f32 = 30.0;
 
 pub struct TrashPlugin;
@@ -256,10 +256,10 @@ fn spawn_trash(
 ) {
 
     static SPAWN_CHANCES: [TrashType; 2] = [TrashType::Bottle, TrashType::Pizza];
-    static POWER_UP_CHANCES: [PowerUp; 1] = [
-        // PowerUp::None,
+    static POWER_UP_CHANCES: [PowerUp; 3] = [
+        PowerUp::None,
         PowerUp::Explosion,
-        // PowerUp::Link
+        PowerUp::Link
     ];
 
     if spawn_timer.0.tick(time.delta()).just_finished() {
@@ -561,15 +561,9 @@ fn trash_power_ups_effects(
                     color_change_interval,
                     1.0,
                 );
-                // println!("Link power up");
-                // commands.entity(entity).remove::<TrashActionActive>();
-                // commands.entity(entity).remove::<TrashMarked>();
-                // commands.entity(entity).despawn_descendants();
-                // commands.entity(entity).insert(TrashActionDuplicate);
             },
             _ => {}
         }
-        // commands.entity(entity).remove::<TrashMarked>();
     }
 
     for mut sprite in &mut inactive_trash_query.iter_mut() {
@@ -707,7 +701,8 @@ fn create_duplicated_trash_from_entity(commands: &mut Commands, sprite: Handle<I
     bundle.velocity = Velocity::zero();
 
     commands.spawn(bundle)
-        .insert(transform);
+        .insert(transform)
+        .insert(GravityScale(20.0));
         // .insert(TrashActionDuplicate);
 }
 
@@ -884,7 +879,6 @@ fn clamp_duplicated_trash(
     for mut velocity in trash_query.iter_mut() {
         if velocity.linvel.length() > TRASH_STARTING_VELOCITY.length() / 2.0 {
             velocity.linvel = velocity.linvel.clamp(Vec2::new(0.0, 0.0), Vec2::new(TRASH_MAXIMUM_VELOCITY_LENGTH, TRASH_MAXIMUM_VELOCITY_LENGTH));
-            // commands.entity(entity).despawn_recursive();
         }
         // println!("Velocity: {:?}", velocity.linvel.length());
         // if velocity.linvel.length() < TRASH_STARTING_VELOCITY.length() / 2.0 {
