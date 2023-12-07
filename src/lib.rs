@@ -8,6 +8,7 @@ mod player;
 mod trash;
 mod typing;
 mod trash_text;
+mod score;
 
 use crate::actions::ActionsPlugin;
 use crate::audio::InternalAudioPlugin;
@@ -19,6 +20,7 @@ use bevy::app::App;
 
 use bevy::prelude::*;
 
+use self::score::ScorePlugin;
 use self::trash::TrashPlugin;
 
 // This example game uses States to separate logic
@@ -44,6 +46,7 @@ impl Plugin for GamePlugin {
             MenuPlugin,
             ActionsPlugin,
             InternalAudioPlugin,
+            ScorePlugin,
             TrashPlugin,
             // PlayerPlugin,
         ));

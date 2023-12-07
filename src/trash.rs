@@ -1,5 +1,6 @@
 use crate::loading::TextureAssets;
 use crate::GameState;
+use crate::score::Score;
 use crate::trash_text::{TrashText, TrashTextBundle, highlight_characters, remove_highlight};
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
@@ -305,10 +306,10 @@ fn setup(
 
 
 fn create_borders(commands: &mut Commands, textures: &Res<TextureAssets>, max_x: f32, max_y: f32) {
-    let y_pos = (max_y * -1.0) + 16.0;
+    let y_pos = 16.0;
     let x_pos = (max_x * -1.0) + 16.0;
     let iterations_x = (max_x % BORDER_TILE_SIZE) + max_x;
-    let iterations_y = (max_y % BORDER_TILE_SIZE) + max_y;
+    let iterations_y = ((max_y % BORDER_TILE_SIZE) + max_y) * 2.0;
 
     for x in (0..=iterations_x as u32).step_by(BORDER_TILE_SIZE as usize) {
         commands.spawn(
@@ -325,25 +326,89 @@ fn create_borders(commands: &mut Commands, textures: &Res<TextureAssets>, max_x:
             get_border_tile(Vec3::new(x_pos, y as f32, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
         )
         .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
-        .insert(Wall);
+        .insert(Wall)
+        .with_children(|parent| {
+            parent.spawn(
+                Text2dBundle {
+                    text: Text::from_section(
+                            format!("Position: {:?}", (x_pos, y)),
+                            TextStyle {
+                                font_size: 20.0,
+                                color: Color::RED,
+                                ..default()
+                            }
+                        ),
+                    // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
+                    ..default()
+                }
+            );
+        });
 
         commands.spawn(
             get_border_tile(Vec3::new(-x_pos, y as f32, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
         )
         .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
-        .insert(Wall);
+        .insert(Wall)
+        .with_children(|parent| {
+            parent.spawn(
+                Text2dBundle {
+                    text: Text::from_section(
+                            format!("Position: {:?}", (-x_pos, y)),
+                            TextStyle {
+                                font_size: 20.0,
+                                color: Color::RED,
+                                ..default()
+                            }
+                        ),
+                    // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
+                    ..default()
+                }
+            );
+        });
 
-        commands.spawn(
-            get_border_tile(Vec3::new(x_pos, y as f32 * -1.0, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
-        )
-        .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
-        .insert(Wall);
-
-        commands.spawn(
-            get_border_tile(Vec3::new(-x_pos, y as f32 * -1.0, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
-        )
-        .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
-        .insert(Wall);
+    //     commands.spawn(
+    //         get_border_tile(Vec3::new(x_pos, y as f32 * -1.0, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
+    //     )
+    //     .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
+    //     .insert(Wall)
+    //     .with_children(|parent| {
+    //         parent.spawn(
+    //             Text2dBundle {
+    //                 text: Text::from_section(
+    //                         format!("Position: {:?}", (x_pos, y as f32 * -1.0)),
+    //                         TextStyle {
+    //                             font_size: 20.0,
+    //                             color: Color::RED,
+    //                             ..default()
+    //                         }
+    //                     ),
+    //                 // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
+    //                 ..default()
+    //             }
+    //         );
+    //     });
+    //
+    //     commands.spawn(
+    //         get_border_tile(Vec3::new(-x_pos, y as f32 * -1.0, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
+    //     )
+    //     .insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
+    //     .insert(Wall)
+    //     .with_children(|parent| {
+    //         parent.spawn(
+    //             Text2dBundle {
+    //                 text: Text::from_section(
+    //                         format!("Position: {:?}", (-x_pos, y as f32 * -1.0)),
+    //                         TextStyle {
+    //                             font_size: 20.0,
+    //                             color: Color::RED,
+    //                             ..default()
+    //                         }
+    //                     ),
+    //                 // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 1.0)),
+    //                 ..default()
+    //             }
+    //         );
+    //     });
     }
 }
 
@@ -530,25 +595,31 @@ fn handle_trash_collision(
 
 fn destroy_matching_trash(
     mut commands: Commands,
-    trash_query: Query<(&Parent, &TrashText)>,
+    trash_query: Query<(&Parent, &Transform, &TrashText)>,
     mut typing_buffer: ResMut<TypingBuffer>,
+    mut score: ResMut<Score>,
 ) {
 
     if !typing_buffer.is_changed() {
         return;
     }
 
-    let mut trash_to_destroy: Vec<&Parent> = Vec::new();
-    for (entity, trash_text) in &mut trash_query.iter() {
+    // let mut trash_to_destroy: Vec<&Parent> = Vec::new();
+    let mut should_clear_buffer = false;
+
+    for (entity, _transform, trash_text) in &mut trash_query.iter() {
         if typing_buffer.0 == trash_text.word {
-            trash_to_destroy.push(entity);
+            // trash_to_destroy.push(entity);
+            score.0 += 1;
+            commands.entity(entity.get()).despawn_recursive();
+            should_clear_buffer = true;
         }
     }
-    for entity in &trash_to_destroy {
-        commands.entity(entity.get()).despawn_recursive();
-    }
+    // for entity in &trash_to_destroy {
+    //     commands.entity(entity.get()).despawn_recursive();
+    // }
 
-    if trash_to_destroy.len() > 0 {
+    if should_clear_buffer {
         typing_buffer.0 = "".to_string();
     }
 }

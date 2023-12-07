@@ -32,9 +32,14 @@ impl Default for ButtonColors {
 #[derive(Component)]
 struct Menu;
 
-fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
+fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>, window: Query<&Window>) {
     info!("menu");
-    commands.spawn(Camera2dBundle::default());
+    let window_height = window.single().height() / 2.0;
+
+    commands.spawn(Camera2dBundle {
+        transform: Transform::from_translation(Vec3::new(0.0, window_height, 0.0)),
+        ..default()
+    });
     commands
         .spawn((
             NodeBundle {
