@@ -1,8 +1,9 @@
+use crate::clone_entity::CloneEntity;
 use crate::loading::TextureAssets;
 use crate::GameState;
 use crate::score::{Score, ComboMeter, ComboModifier};
 use crate::trash_text::{TrashText, TrashTextBundle, highlight_characters, remove_highlight};
-use bevy::prelude::*;
+use bevy::{prelude::*, reflect};
 use bevy::sprite::Anchor;
 use bevy::transform::TransformSystem;
 use bevy::utils::HashMap;
@@ -16,31 +17,56 @@ const BORDER_TILE_SCALE: Vec2 = Vec2::new(BORDER_TILE_SIZE, BORDER_TILE_SIZE);
 
 pub struct TrashPlugin;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Reflect)]
 pub enum TrashType {
     Bottle,
     Pizza
 }
+impl Default for TrashType {
+    fn default() -> Self {
+        Self::Bottle
+    }
+}
 
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component)]
 pub struct Trash {
     pub trash_type: TrashType,
     pub size: Vec2,
 }
 
-#[derive(Component, Debug, Clone)]
+impl Default for Trash {
+    fn default() -> Self {
+        Self::bottle()
+    }
+}
+
+
+#[derive(Component, Debug, Clone, Default, Reflect)]
+#[reflect(Component)]
 pub struct BufferText;
 
 
-#[derive(Component)]
-pub struct TrashActive;
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct TrashActionActive;
 
-#[derive(Component)]
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct TrashActionDuplicate;
+
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
 pub struct TrashMarked;
 
-#[derive(Component)]
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
 pub struct Wall;
+
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct Floor;
 
 // #[derive(Component, Debug, Clone)]
 // pub struct TrashLabel;
@@ -57,6 +83,82 @@ pub struct TypingBuffer(String);
 #[derive(Resource)]
 pub struct AvailableWords(HashMap<String, Vec<String>>);
 
+
+#[derive(Bundle)]
+pub struct TrashBundle {
+    sprite: SpriteBundle,
+    // transform: Transform,
+    rigidbody: RigidBody,
+    velocity: Velocity,
+    collider: Collider,
+    collider_mass_properties: ColliderMassProperties,
+    restitution: Restitution,
+    active_events: ActiveEvents,
+    trash: Trash,
+}
+
+impl TrashBundle {
+    pub fn new(sprite: Handle<Image>, trash: Trash) -> Self {
+        Self {
+            sprite: SpriteBundle {
+                texture: sprite,
+                ..default()
+            },
+            // transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)),
+            rigidbody: RigidBody::Dynamic,
+            velocity: Velocity::default(),
+            collider: Collider::cuboid(trash.size.x, trash.size.y),
+            collider_mass_properties: ColliderMassProperties::Mass(1.0),
+            restitution: Restitution::coefficient(0.2),
+            active_events: ActiveEvents::COLLISION_EVENTS,
+            trash: trash.clone(),
+        }
+    }
+
+    pub fn create_text(text: String, anchor: Anchor, color: Color, style: TextStyle) -> TrashTextBundle {
+        // self.sprite = self.with with_children(|parent| {
+        //     parent.spawn(
+                TrashTextBundle::new(
+                    text,
+                    anchor,
+                    color,
+                    style,
+                )
+            // )
+        // });
+        // self
+    }
+}
+
+        // .spawn(SpriteBundle {
+        //     texture: sprite,
+        //     // transform: transform.clone(), // Transform::from_scale(Vec3::new(1.5, 1.5, 1.5)), //transform.clone(),
+        //     ..default()
+        // })
+        // // .insert(Velocity::angular(3.0))
+        // .insert(Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)))
+        // .insert(RigidBody::Dynamic)
+        // .insert(Collider::cuboid(trash.size.x, trash.size.y))
+        // .insert(ColliderMassProperties::Mass(10.0))
+        // .insert(Restitution::coefficient(0.7))
+        // .insert(ActiveEvents::COLLISION_EVENTS)
+        // .insert(TrashActive)
+        // .insert(trash.clone())
+        // .with_children(|parent| {
+        //     parent.spawn(
+        //         TrashTextBundle::new(
+        //             word,
+        //             Anchor::Custom(Vec2::new(0.0, -2.0)),
+        //             Color::GREEN,
+        //             TextStyle {
+        //                 color: Color::WHITE,
+        //                 font_size: 20.0,
+        //                 ..default()
+        //             }
+        //         )
+        //     );
+        // });
+
 /// This plugin handles player related stuff like movement
 /// Player logic is only active during the State `GameState::Playing`
 impl Plugin for TrashPlugin {
@@ -68,7 +170,7 @@ impl Plugin for TrashPlugin {
         .add_systems(OnEnter(GameState::Playing), setup)
         .add_systems(Update, (
                 spawn_trash.run_if(in_state(GameState::Playing)),
-                handle_trash_collision.before(typing),
+                handle_trash_collision.before(typing).after(setup),
                 typing.after(handle_trash_collision),
                 destroy_matching_trash.after(typing),
                 update_buffer_text.after(typing),
@@ -137,109 +239,96 @@ fn spawn_trash(
         // };
 
         println!("Spawning trash: {:?}", trash);
-        create_trash(&mut commands, &textures, trash, get_random_word(&available_words), Vec2::new(random_x as f32, y_pos));
+        let trash_bundle = TrashBundle::new(get_trash_sprite(&trash.trash_type, &textures), trash);
+        let trash_text = TrashBundle::create_text(
+            get_random_word(&available_words),
+            Anchor::Custom(Vec2::new(0.0, -2.0)),
+            Color::GREEN,
+            TextStyle {
+                color: Color::WHITE,
+                font_size: 20.0,
+                ..default()
+            }
+        );
+        commands.spawn(trash_bundle)
+            .insert(Transform::from_translation(Vec3::new(random_x as f32, y_pos, 0.0)))
+            .insert(TrashActionActive)
+            .insert(TrashActionDuplicate)
+            .with_children(|parent| {
+                parent.spawn(trash_text);
+            });
+
+        // create_trash(&mut commands, &textures, trash, get_random_word(&available_words), Vec2::new(random_x as f32, y_pos));
     }
-
-
-    // match keyboard_input.pressed(KeyCode::B) {
-    //     true => {
-    //         let trash = Trash {
-    //             trash_type: TrashType::Bottle
-    //         };
-    //         create_trash(&mut commands, &textures, trash, Vec2::new(random_x as f32, y_pos));
-    //     }
-    //     false => {}
-    // }
-    //
-    // match keyboard_input.pressed(KeyCode::P) {
-    //     true => {
-    //         let trash = Trash {
-    //             trash_type: TrashType::Pizza
-    //         };
-    //         create_trash(&mut commands, &textures, trash, Vec2::new(random_x as f32, y_pos));
-    //     }
-    //     false => {}
-    // }
-
 }
 
 
-pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, trash: Trash, word: String, pos: Vec2) {
-    let sprite = get_trash_sprite(&trash.trash_type, textures);
-    let mut transform = Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0));
-    transform.scale = Vec3::new(1.5, 1.5, 1.5);
-    transform.rotation = Quat::from_rotation_y(30.0);
+// pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, trash: Trash, word: String, pos: Vec2) -> TrashBundle {
+    // let sprite = get_trash_sprite(&trash.trash_type, textures);
+    // let mut transform = Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0));
+    // transform.scale = Vec3::new(1.5, 1.5, 1.5);
+    // transform.rotation = Quat::from_rotation_y(30.0);
 
-    // let text = commands.spawn(Text2dBundle {
-    //         text: Text::from_section(trash.word.clone(), TextStyle {
-    //             color: Color::WHITE,
-    //             font_size: 20.0,
-    //             ..default()
-    //
-    //         }),//.with_alignment(TextAlignment::Center),
-    //         // transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 1.0)),
-    //         // transform: transform.clone(),
-    //         // Custom anchor point. Top left is `(-0.5, 0.5)`, center is `(0.0, 0.0)`. The value will
-    //         text_anchor: Anchor::Custom(Vec2::new(0.0, -2.0)),
-    //         ..default()
-    //     })
-    //     // .insert(RigidBody::Fixed)
-    //     .id();
-
-    commands
-        .spawn(SpriteBundle {
-            texture: sprite,
-            // transform: transform.clone(), // Transform::from_scale(Vec3::new(1.5, 1.5, 1.5)), //transform.clone(),
-            ..default()
-        })
-        // .insert(Velocity::angular(3.0))
-        .insert(Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)))
-        .insert(RigidBody::Dynamic)
-        .insert(Collider::cuboid(trash.size.x, trash.size.y))
-        .insert(ColliderMassProperties::Mass(10.0))
-        .insert(Restitution::coefficient(0.7))
-        .insert(ActiveEvents::COLLISION_EVENTS)
-        .insert(TrashActive)
-        .insert(trash.clone())
-        .with_children(|parent| {
-            parent.spawn(
-                TrashTextBundle::new(
-                    word,
-                    Anchor::Custom(Vec2::new(0.0, -2.0)),
-                    Color::GREEN,
-                    TextStyle {
-                        color: Color::WHITE,
-                        font_size: 20.0,
-                        ..default()
-                    }
-                )
-            );
-                // Text2dBundle {
-                // text: Text::from_section(trash.word.clone(), TextStyle {
-                //     color: Color::WHITE,
-                //     font_size: 20.0,
-                //     ..default()
-                //
-                // }),//.with_alignment(TextAlignment::Center),
-                // // transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 1.0)),
-                // // transform: transform.clone(),
-                // // Custom anchor point. Top left is `(-0.5, 0.5)`, center is `(0.0, 0.0)`. The value will
-                // text_anchor: Anchor::Custom(Vec2::new(0.0, -2.0)),
-                // ..default()
-            // })
-            // .insert(TrashLabel));
-        });
-        // .id();
-        // .insert(trash)
-        // .add_child(text);
-    // commands.spawn(trash.clone())
-    //     .insert(Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)))
-    //     .insert(RigidBody::Dynamic)
-    //     .insert(Collider::cuboid(trash.size.x, trash.size.y))
-    //     .insert(ColliderMassProperties::Mass(1.0))
-    //     .add_child(sprite)
-    //     .add_child(text);
-}
+    // commands
+    //     .spawn(
+            // TrashBundle {
+            //     sprite: SpriteBundle {
+            //         texture: sprite,
+            //         ..default()
+            //     },
+            //     // transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)),
+            //     rigidbody: RigidBody::Dynamic,
+            //     collider: Collider::cuboid(trash.size.x, trash.size.y),
+            //     collider_mass_properties: ColliderMassProperties::Mass(1.0),
+            //     restitution: Restitution::coefficient(0.7),
+            //     active_events: ActiveEvents::COLLISION_EVENTS,
+            //     // trash_action: TrashActionActive,
+            //     trash: trash.clone(),
+            // }
+        // )
+        // .with_children(|parent| {
+        //     parent.spawn(
+        //         TrashTextBundle::new(
+        //             word,
+        //             Anchor::Custom(Vec2::new(0.0, -2.0)),
+        //             Color::GREEN,
+        //             TextStyle {
+        //                 color: Color::WHITE,
+        //                 font_size: 20.0,
+        //                 ..default()
+        //             }
+        //         )
+        //     );
+        // });
+        // .spawn(SpriteBundle {
+        //     texture: sprite,
+        //     // transform: transform.clone(), // Transform::from_scale(Vec3::new(1.5, 1.5, 1.5)), //transform.clone(),
+        //     ..default()
+        // })
+        // // .insert(Velocity::angular(3.0))
+        // .insert(Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)))
+        // .insert(RigidBody::Dynamic)
+        // .insert(Collider::cuboid(trash.size.x, trash.size.y))
+        // .insert(ColliderMassProperties::Mass(10.0))
+        // .insert(Restitution::coefficient(0.7))
+        // .insert(ActiveEvents::COLLISION_EVENTS)
+        // .insert(TrashAction)
+        // .insert(trash.clone())
+        // .with_children(|parent| {
+        //     parent.spawn(
+        //         TrashTextBundle::new(
+        //             word,
+        //             Anchor::Custom(Vec2::new(0.0, -2.0)),
+        //             Color::GREEN,
+        //             TextStyle {
+        //                 color: Color::WHITE,
+        //                 font_size: 20.0,
+        //                 ..default()
+        //             }
+        //         )
+        //     );
+        // });
+// }
 
 
 fn get_trash_sprite(trash_type: &TrashType, textures: &Res<TextureAssets>) -> Handle<Image> {
@@ -315,11 +404,13 @@ fn create_borders(commands: &mut Commands, textures: &Res<TextureAssets>, max_x:
     for x in (0..=iterations_x as u32).step_by(BORDER_TILE_SIZE as usize) {
         commands.spawn(
             get_border_tile(Vec3::new(x as f32, y_pos, 1.0), textures.ground.clone(), BORDER_TILE_SCALE.clone())
-        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
+        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
+        .insert(Floor);
 
         commands.spawn(
             get_border_tile(Vec3::new(x as f32 * -1.0, y_pos, 1.0), textures.ground.clone(), BORDER_TILE_SCALE.clone())
-        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0));
+        ).insert(Collider::cuboid(BORDER_TILE_SIZE / 2.0, BORDER_TILE_SIZE / 2.0))
+        .insert(Floor);
     }
 
     for y in (0..=iterations_y as u32).step_by(BORDER_TILE_SIZE as usize) {
@@ -439,7 +530,7 @@ fn update_buffer_text(
 // https://github.com/bevyengine/bevy/issues/1780#issuecomment-1760929069
 fn fix_trash_label_rotation(
     mut text_query: Query<(&Parent, &mut Transform), With<TrashText>>,
-    query_parents: Query<&Transform, (With<Trash>, Without<TrashText>, With<TrashActive>)>,
+    query_parents: Query<&Transform, (With<Trash>, Without<TrashText>, With<TrashActionActive>)>,
 ) {
     for (parent, mut transform) in text_query.iter_mut() {
         if let Ok(parent_transform) = query_parents.get(parent.get()) {
@@ -569,43 +660,193 @@ fn highlight_character(
 }
 
 fn remove_trash_text(commands: &mut Commands, trash_entity: &Entity) {
-    commands.entity(*trash_entity).remove::<TrashActive>();
+    commands.entity(*trash_entity).remove::<TrashActionActive>();
     commands.entity(*trash_entity).remove::<TrashMarked>();
     commands.entity(*trash_entity).despawn_descendants();
+
+    commands.entity(*trash_entity).insert(TrashActionDuplicate);
+}
+
+fn create_duplicated_trash_from_entity(commands: &mut Commands, sprite: Handle<Image>, trash: Trash, transform: Transform) {
+    // let trash = duplicate_trash_query.get_component::<Trash>(*entity1).unwrap();
+    let bundle = TrashBundle::new(sprite, trash.clone());
+    commands.spawn(bundle)
+        .insert(transform);
+        // .insert(TrashActionDuplicate);
+}
+
+fn should_delete_text(
+    entity: &Entity,
+    other: &Entity,
+    active_trash_query: &Query<(Entity, &Velocity), With<TrashActionActive>>,
+    inactive_trash_query: &Query<(Entity, &Velocity), (Without<TrashActionActive>, With<Trash>)>,
+    // mut duplicate_trash_query: Query<(Entity, &Trash, &Transform, &Handle<Image>), (Without<TrashActionActive>, With<TrashActionDuplicate>)>,
+    walls_query: &Query<Entity, With<Wall>>,
+    floor_query: &Query<Entity, With<Floor>>,
+
+) -> bool {
+
+    if walls_query.get(*entity).is_ok() || walls_query.get(*other).is_ok() {
+        return false;
+    }
+
+    if let Ok(active_trash) = active_trash_query.get(*entity) {
+        // println!("Active trash: {:?}", active_trash);
+        if floor_query.get(*other).is_ok() {
+            // println!("We hit the floor");
+            return true;
+            // remove_trash_text(&mut commands, &active_trash.0);
+            // typing_buffer.0 = "".to_string();
+        }
+        if active_trash_query.get(*other).is_err() {
+            if let Ok(inactive_trash) = inactive_trash_query.get(*other) {
+                if inactive_trash.1.linvel.length() < active_trash.1.linvel.length() {
+                    // should_remove = true;
+                    return true;
+                }
+            }
+        }
+
+        // if should_remove {
+        //     remove_trash_text(&mut commands, &active_trash.0);
+        //     typing_buffer.0 = "".to_string();
+        // }
+    }
+
+    return false;
 }
 
 fn handle_trash_collision(
     mut commands: Commands,
+    // textures: Res<TextureAssets>,
     mut typing_buffer: ResMut<TypingBuffer>,
     mut collision_events: EventReader<CollisionEvent>,
-    mut trash_query: Query<Entity, With<TrashActive>>,
+    active_trash_query: Query<(Entity, &Velocity), With<TrashActionActive>>,
+    inactive_trash_query: Query<(Entity, &Velocity), (Without<TrashActionActive>, With<Trash>)>,
+    mut duplicate_trash_query: Query<(Entity, &Trash, &Transform, &Handle<Image>), (Without<TrashActionActive>, With<TrashActionDuplicate>)>,
+    // duplicate_trash_query: Query<&Trash, (Without<TrashActionActive>, With<TrashActionDuplicate>)>,
     walls_query: Query<Entity, With<Wall>>,
+    floor_query: Query<Entity, With<Floor>>,
 ) {
     for collision_event in collision_events.read() {
         match collision_event {
             CollisionEvent::Started(entity1, entity2, _) => {
-                if let Ok(trash_entity) = trash_query.get_mut(*entity1) {
-                    match trash_query.get_mut(*entity2) {
-                        Ok(_) => (),
-                        Err(_) => {
-                            match walls_query.get(*entity2) {
-                                Ok(_) => (),
-                                Err(_) => {
-                                    remove_trash_text(&mut commands, &trash_entity);
-                                    typing_buffer.0 = "".to_string();
-                                },
-                            }
-                        }
-                    };
-                } else if let Ok(trash_entity) = trash_query.get_mut(*entity2) {
-                    match walls_query.get(*entity1) {
-                        Ok(_) => (),
-                        Err(_) => {
-                            remove_trash_text(&mut commands, &trash_entity);
-                            typing_buffer.0 = "".to_string();
-                        },
-                    }
+                if should_delete_text(entity1, entity2, &active_trash_query, &inactive_trash_query, &walls_query, &floor_query) {
+                    println!("Should delete text");
+                    remove_trash_text(&mut commands, &entity1);
+                    typing_buffer.0 = "".to_string();
+
+                } else if should_delete_text(entity2, entity1, &active_trash_query, &inactive_trash_query, &walls_query, &floor_query) {
+                    println!("Should delete text 2");
+                    remove_trash_text(&mut commands, &entity2);
+                    typing_buffer.0 = "".to_string();
                 }
+                // if walls_query.get(*entity1).is_ok() || walls_query.get(*entity2).is_ok() {
+                //     continue;
+                // }
+                // if let Ok(active_trash) = active_trash_query.get(*entity1) {
+                //     let mut should_remove = false;
+                //     if floor_query.get(*entity2).is_ok() {
+                //         should_remove = true;
+                //         remove_trash_text(&mut commands, &active_trash.0);
+                //         typing_buffer.0 = "".to_string();
+                //     }
+                //     if active_trash_query.get(*entity2).is_err() {
+                //         if let Ok(inactive_trash) = inactive_trash_query.get(*entity2) {
+                //             if inactive_trash.1.linvel.length() < active_trash.1.linvel.length() {
+                //                 should_remove = true;
+                //             }
+                //         }
+                //     }
+                //
+                //     if should_remove {
+                //         remove_trash_text(&mut commands, &active_trash.0);
+                //         typing_buffer.0 = "".to_string();
+                //     }
+                //
+                //     // match active_trash_query.get(*entity2) {
+                //     //     Ok(_) => (),
+                //     //     Err(_) => {
+                //     //         // match walls_query.get(*entity2) {
+                //     //         //     Ok(_) => (),
+                //     //         //     Err(_) => {
+                //     //         if let Ok(inactive_trash) = inactive_trash_query.get(*entity2) {
+                //     //             // commands.entity(inactive_trash.0).insert(TrashActionActive);
+                //     //             // typing_buffer.0 = "".to_string();
+                //     //             if inactive_trash.1.linvel.length() < active_trash.1.linvel.length() {
+                //     //                 remove_trash_text(&mut commands, &active_trash.0);
+                //     //                 typing_buffer.0 = "".to_string();
+                //     //             }
+                //     //         }
+                //     //         //     },
+                //     //         // }
+                //     //     }
+                //     // };
+                // } else if let Ok(active_trash) = active_trash_query.get(*entity2) {
+                //     // match walls_query.get(*entity1) {
+                //     //     Ok(_) => (),
+                //     //     Err(_) => {
+                //     
+                //     let mut should_remove = false;
+                //     if floor_query.get(*entity1).is_ok() {
+                //         should_remove = true;
+                //         remove_trash_text(&mut commands, &active_trash.0);
+                //         typing_buffer.0 = "".to_string();
+                //     }
+                //     if active_trash_query.get(*entity1).is_err() {
+                //         if let Ok(inactive_trash) = inactive_trash_query.get(*entity1) {
+                //             if inactive_trash.1.linvel.length() < active_trash.1.linvel.length() {
+                //                 should_remove = true;
+                //             }
+                //         }
+                //     }
+                //
+                //     if should_remove {
+                //         remove_trash_text(&mut commands, &active_trash.0);
+                //         typing_buffer.0 = "".to_string();
+                //     }
+                //
+                //
+                //
+                //     if let Ok(inactive_trash) = inactive_trash_query.get(*entity1) {
+                //         if inactive_trash.1.linvel.length() < active_trash.1.linvel.length() {
+                //             remove_trash_text(&mut commands, &active_trash.0);
+                //             typing_buffer.0 = "".to_string();
+                //         }
+                //     }
+                //     //     },
+                //     // }
+                // } //else {
+                    let mut duplicate_entity: Option<(Entity, &Trash, &Transform, &Handle<Image>)> = None;
+
+                    if let Ok(trash_data) = duplicate_trash_query.get(*entity1) {
+                        if floor_query.get(*entity2).is_err() && walls_query.get(*entity2).is_err() {
+                            commands.entity(trash_data.0).remove::<TrashActionDuplicate>();
+                            duplicate_entity = Some(trash_data.clone());
+                        }
+                    }
+
+                    if let Ok(trash_data) = duplicate_trash_query.get(*entity2) {
+                        // if trash_data_one.0 != trash_data_two.0 {
+                            // let trash = duplicate_trash_query.get_component::<Trash>(*entity1).unwrap();
+                            // let transform = duplicate_trash_query.get_component::<Transform>(*entity1).unwrap();
+                            // let sprite = duplicate_trash_query.get_component::<Handle<Image>>(*entity1).unwrap();
+                        if floor_query.get(*entity1).is_err() && walls_query.get(*entity1).is_err() {
+                            commands.entity(trash_data.0).remove::<TrashActionDuplicate>();
+                            duplicate_entity = Some(trash_data.clone());
+                        }
+
+                        // }
+                    }
+
+                    if let Some(trash_data) = duplicate_entity {
+                        create_duplicated_trash_from_entity(
+                            &mut commands,
+                            trash_data.3.clone(),
+                            trash_data.1.clone(),
+                            trash_data.2.clone());
+                    }
+                //}
             }
             CollisionEvent::Stopped(_entity1, _entity2, _) => {},
         }

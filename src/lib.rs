@@ -9,6 +9,7 @@ mod trash;
 mod typing;
 mod trash_text;
 mod score;
+mod clone_entity;
 
 use crate::actions::ActionsPlugin;
 use crate::audio::InternalAudioPlugin;
