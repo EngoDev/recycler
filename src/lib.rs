@@ -19,6 +19,7 @@ use crate::menu::MenuPlugin;
 use bevy::app::App;
 
 use bevy::prelude::*;
+use bevy_progressbar::ProgressBarPlugin;
 
 use self::score::ScorePlugin;
 use self::trash::TrashPlugin;
@@ -46,6 +47,7 @@ impl Plugin for GamePlugin {
             MenuPlugin,
             ActionsPlugin,
             InternalAudioPlugin,
+            ProgressBarPlugin,
             ScorePlugin,
             TrashPlugin,
             // PlayerPlugin,

@@ -64,6 +64,7 @@ winit = { version = "0.28.7", default-features = false }
 image = { version = "0.24", default-features = false }
 bevy_rapier2d = "0.23.0"
 rapier2d = "0.17.2"
+bevy-progressbar = "0.6.1"
 
 [build-dependencies]
 embed-resource = "1.4"

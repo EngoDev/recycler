@@ -1,11 +1,12 @@
 use crate::loading::TextureAssets;
 use crate::GameState;
-use crate::score::Score;
+use crate::score::{Score, ComboMeter, ComboModifier};
 use crate::trash_text::{TrashText, TrashTextBundle, highlight_characters, remove_highlight};
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use bevy::transform::TransformSystem;
 use bevy::utils::HashMap;
+use bevy_progressbar::ProgressBar;
 use bevy_rapier2d::prelude::*;
 use rand::Rng;
 
@@ -195,7 +196,7 @@ pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, tras
         .insert(Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)))
         .insert(RigidBody::Dynamic)
         .insert(Collider::cuboid(trash.size.x, trash.size.y))
-        .insert(ColliderMassProperties::Mass(1.0))
+        .insert(ColliderMassProperties::Mass(10.0))
         .insert(Restitution::coefficient(0.7))
         .insert(ActiveEvents::COLLISION_EVENTS)
         .insert(TrashActive)
@@ -460,6 +461,8 @@ fn remove_all_marked_trash(
 fn typing(
     mut commands: Commands,
     mut typing_buffer: ResMut<TypingBuffer>,
+    mut combo_meter_query: Query<&mut ProgressBar, With<ComboMeter>>,
+    mut combo_modifier: ResMut<ComboModifier>,
     keyboard_input: Res<Input<KeyCode>>,
     trash_query: Query<(&Parent, &TrashText)>,
     marked_trash_query: Query<Entity, With<TrashMarked>>,
@@ -474,6 +477,7 @@ fn typing(
     }
 
     let mut buffer_word = typing_buffer.0.clone();
+    let mut did_delete_letter = false;
 
     for key in keyboard_input.get_just_pressed() {
         match key {
@@ -503,11 +507,17 @@ fn typing(
             KeyCode::X => buffer_word.push('x'),
             KeyCode::Y => buffer_word.push('y'),
             KeyCode::Z => buffer_word.push('z'),
-            KeyCode::Back => { let _ = buffer_word.pop(); },
+            KeyCode::Back => { 
+                let _ = buffer_word.pop(); 
+                did_delete_letter = true;
+            },
             _ => {}
         }
     }
 
+    if buffer_word == typing_buffer.0 {
+        return;
+    }
 
     let mut to_be_removed = vec![];
     let mut is_existing_matching_word = false;
@@ -527,6 +537,16 @@ fn typing(
 
     if is_existing_matching_word {
         typing_buffer.0 = buffer_word.clone();
+        if !did_delete_letter {
+            for mut progress_bar in &mut combo_meter_query.iter_mut() {
+                progress_bar.increase_progress(0.1);
+            }
+        }
+    } else {
+        for mut progress_bar in &mut combo_meter_query.iter_mut() {
+            progress_bar.reset();
+            combo_modifier.0 = 1;
+        }
     }
 
     for entity in to_be_removed {
@@ -598,6 +618,7 @@ fn destroy_matching_trash(
     trash_query: Query<(&Parent, &Transform, &TrashText)>,
     mut typing_buffer: ResMut<TypingBuffer>,
     mut score: ResMut<Score>,
+    combo_modifier: Res<ComboModifier>,
 ) {
 
     if !typing_buffer.is_changed() {
@@ -610,7 +631,7 @@ fn destroy_matching_trash(
     for (entity, _transform, trash_text) in &mut trash_query.iter() {
         if typing_buffer.0 == trash_text.word {
             // trash_to_destroy.push(entity);
-            score.0 += 1;
+            score.0 += 1 * combo_modifier.0;
             commands.entity(entity.get()).despawn_recursive();
             should_clear_buffer = true;
         }
