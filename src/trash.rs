@@ -17,7 +17,8 @@ const BORDER_TILE_SIZE: f32 = 48.0;
 const BORDER_TILE_SCALE: Vec2 = Vec2::new(BORDER_TILE_SIZE, BORDER_TILE_SIZE);
 
 const TRASH_STARTING_VELOCITY: Vec2 = Vec2::new(0.0, -100.0);
-const TRASH_MAXIMUM_VELOCITY_LENGTH: f32 = 100.0;
+const TRASH_MAXIMUM_VERTICAL_VELOCITY_LENGTH: f32 = 40.0;
+const TRASH_MAXIMUM_HORIZONTAL_VELOCITY_LENGTH: f32 = 600.0;
 const TRASH_SPAWN_DISTANCE_BETWEEN_SPAWNS: f32 = 30.0;
 
 pub struct TrashPlugin;
@@ -190,7 +191,7 @@ impl TrashBundle {
 impl Plugin for TrashPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(TrashSpawnTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
-        .insert_resource(DifficultyTimer(Timer::from_seconds(10.0, TimerMode::Repeating)))
+        .insert_resource(DifficultyTimer(Timer::from_seconds(30.0, TimerMode::Repeating)))
         // .insert_resource(BufferTextDeleteTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
         .insert_resource(TypingBuffer("".to_string()))
         .insert_resource(AvailableWords(get_available_words_from_file()))
@@ -347,33 +348,33 @@ fn setup(
     //     })
     //     .with_children(|parent| {
 
-    // commands.spawn((
-    //     TextBundle::from_section(
-    //         typing_buffer.0.clone(),
-    //         TextStyle {
-    //             font_size: 50.0,
-    //             ..default()
-    //         }
-    //     )
-    //     // .with_text_alignment(TextAlignment::Center)
-    //     .with_style(Style {
-    //             // align_self: AlignSelf::FlexEnd,
-    //             flex_direction: FlexDirection::Row,
-    //             align_items: AlignItems::Center,
-    //             position_type: PositionType::Absolute,
-    //             top: Val::Percent(50.0),
-    //             left: Val::Percent(50.0),
-    //             max_width: Val::Px(200.0),
-    //             max_height: Val::Percent(100.0),
-    //             flex_wrap: FlexWrap::WrapReverse,
-    //             // flex_wrap: FlexWrap::Wrap,
-    //             // bottom: Val::Px(5.0),
-    //             // right: Val::Px(5.0),
-    //             ..default()
-    //         }),
-    //     BufferText,
-    //     )
-    // );
+    commands.spawn((
+        TextBundle::from_section(
+            typing_buffer.0.clone(),
+            TextStyle {
+                font_size: 50.0,
+                ..default()
+            }
+        )
+        // .with_text_alignment(TextAlignment::Center)
+        .with_style(Style {
+                // align_self: AlignSelf::FlexEnd,
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                position_type: PositionType::Absolute,
+                top: Val::Percent(50.0),
+                left: Val::Percent(50.0),
+                max_width: Val::Px(200.0),
+                max_height: Val::Percent(100.0),
+                flex_wrap: FlexWrap::WrapReverse,
+                // flex_wrap: FlexWrap::Wrap,
+                // bottom: Val::Px(5.0),
+                // right: Val::Px(5.0),
+                ..default()
+            }),
+        BufferText,
+        )
+    );
 
     // });
 
@@ -645,9 +646,9 @@ fn remove_explosions(
 fn remove_trash_text(commands: &mut Commands, trash_entity: &Entity) {
     commands.entity(*trash_entity).remove::<TrashActionActive>();
     commands.entity(*trash_entity).remove::<TrashMarked>();
-    commands.entity(*trash_entity). despawn_descendants();
+    commands.entity(*trash_entity).despawn_descendants();
 
-    commands.entity(*trash_entity).insert(TrashActionDuplicate);
+    // commands.entity(*trash_entity).insert(TrashActionDuplicate);
 }
 
 fn create_duplicated_trash_from_entity(commands: &mut Commands, sprite: Handle<Image>, trash: Trash, transform: Transform) {
@@ -997,7 +998,7 @@ fn clamp_duplicated_trash(
 ) {
     for mut velocity in trash_query.iter_mut() {
         if velocity.linvel.length() > TRASH_STARTING_VELOCITY.length() / 2.0 {
-            velocity.linvel = velocity.linvel.clamp(Vec2::new(0.0, 0.0), Vec2::new(TRASH_MAXIMUM_VELOCITY_LENGTH, TRASH_MAXIMUM_VELOCITY_LENGTH));
+            velocity.linvel = velocity.linvel.clamp(Vec2::new(0.0, 0.0), Vec2::new(TRASH_MAXIMUM_HORIZONTAL_VELOCITY_LENGTH, TRASH_MAXIMUM_VERTICAL_VELOCITY_LENGTH ));
         }
         // println!("Velocity: {:?}", velocity.linvel.length());
         // if velocity.linvel.length() < TRASH_STARTING_VELOCITY.length() / 2.0 {
@@ -1032,6 +1033,9 @@ fn activate_matching_trash(
 
                 match trash.0.power_up {
                     PowerUp::Explosion => {
+                        commands.entity(entity.get()).remove::<TrashMarked>();
+                        commands.entity(entity.get()).despawn_descendants();
+                        // remove_trash_text(&mut commands, entity);
                         // commands.spawn(TrashExplosion)
                         //     .insert(trash.1.clone());
                     },
