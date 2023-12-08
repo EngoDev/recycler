@@ -594,6 +594,8 @@ fn typing(
         }
     }
 
+    // TODO: Make the combo meter reset only for words that the player tried to type and then
+    // failed, not for every trash that lands. It's too hard
     if is_existing_matching_word {
         typing_buffer.0 = buffer_word.clone();
         if !did_delete_letter {
