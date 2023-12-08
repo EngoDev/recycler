@@ -17,7 +17,7 @@ const BORDER_TILE_SIZE: f32 = 48.0;
 const BORDER_TILE_SCALE: Vec2 = Vec2::new(BORDER_TILE_SIZE, BORDER_TILE_SIZE);
 
 const TRASH_STARTING_VELOCITY: Vec2 = Vec2::new(0.0, -100.0);
-const TRASH_MAXIMUM_VELOCITY_LENGTH: f32 = 140.0;
+const TRASH_MAXIMUM_VELOCITY_LENGTH: f32 = 100.0;
 const TRASH_SPAWN_DISTANCE_BETWEEN_SPAWNS: f32 = 30.0;
 
 pub struct TrashPlugin;
@@ -47,6 +47,11 @@ impl Default for PowerUp {
     }
 }
 
+#[derive(PartialEq, Clone, Debug)]
+pub enum PowerUpEvent {
+    None,
+    EntityDestroyed,
+}
 
 
 #[derive(Component, Debug, Clone)]
@@ -54,6 +59,7 @@ pub struct Trash {
     pub trash_type: TrashType,
     pub power_up: PowerUp,
     pub size: Vec2,
+    pub activated: bool,
 }
 
 impl Default for Trash {
@@ -75,6 +81,9 @@ pub struct TrashActionDuplicate;
 
 #[derive(Component, Default)]
 pub struct TrashMarked;
+
+#[derive(Component, Default)]
+pub struct TrashExplosion;
 
 #[derive(Component, Default)]
 pub struct Wall;
@@ -191,10 +200,11 @@ impl Plugin for TrashPlugin {
                 trash_power_ups_effects.after(spawn_trash),
                 update_difficuly.after(setup),
                 // destroy_trash_text.after(handle_trash_collision),
-                handle_trash_collision.after(setup),
+                typing.after(setup),
+                handle_trash_collision.after(typing),
                 clamp_duplicated_trash.after(handle_trash_collision),
-                typing.after(handle_trash_collision),
-                destroy_matching_trash.after(typing),
+                activate_matching_trash.after(typing).before(handle_trash_collision),
+                remove_explosions.after(handle_trash_collision),
                 update_buffer_text.after(typing),
                 highlight_character.after(typing),
             )
@@ -217,6 +227,7 @@ impl Trash {
             trash_type: TrashType::Bottle,
             size: Vec2::new(15.0, 16.0),
             power_up: PowerUp::None,
+            activated: false,
         }
     }
 
@@ -225,6 +236,7 @@ impl Trash {
             trash_type: TrashType::Pizza,
             size: Vec2::new(32.0, 16.0),
             power_up: PowerUp::None,
+            activated: false,
         }
     }
 }
@@ -306,77 +318,8 @@ fn spawn_trash(
                 parent.spawn(trash_text);
             });
 
-        // create_trash(&mut commands, &textures, trash, get_random_word(&available_words), Vec2::new(random_x as f32, y_pos));
     }
 }
-
-
-// pub fn create_trash(commands: &mut Commands, textures: &Res<TextureAssets>, trash: Trash, word: String, pos: Vec2) -> TrashBundle {
-    // let sprite = get_trash_sprite(&trash.trash_type, textures);
-    // let mut transform = Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0));
-    // transform.scale = Vec3::new(1.5, 1.5, 1.5);
-    // transform.rotation = Quat::from_rotation_y(30.0);
-
-    // commands
-    //     .spawn(
-            // TrashBundle {
-            //     sprite: SpriteBundle {
-            //         texture: sprite,
-            //         ..default()
-            //     },
-            //     // transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)),
-            //     rigidbody: RigidBody::Dynamic,
-            //     collider: Collider::cuboid(trash.size.x, trash.size.y),
-            //     collider_mass_properties: ColliderMassProperties::Mass(1.0),
-            //     restitution: Restitution::coefficient(0.7),
-            //     active_events: ActiveEvents::COLLISION_EVENTS,
-            //     // trash_action: TrashActionActive,
-            //     trash: trash.clone(),
-            // }
-        // )
-        // .with_children(|parent| {
-        //     parent.spawn(
-        //         TrashTextBundle::new(
-        //             word,
-        //             Anchor::Custom(Vec2::new(0.0, -2.0)),
-        //             Color::GREEN,
-        //             TextStyle {
-        //                 color: Color::WHITE,
-        //                 font_size: 20.0,
-        //                 ..default()
-        //             }
-        //         )
-        //     );
-        // });
-        // .spawn(SpriteBundle {
-        //     texture: sprite,
-        //     // transform: transform.clone(), // Transform::from_scale(Vec3::new(1.5, 1.5, 1.5)), //transform.clone(),
-        //     ..default()
-        // })
-        // // .insert(Velocity::angular(3.0))
-        // .insert(Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0)))
-        // .insert(RigidBody::Dynamic)
-        // .insert(Collider::cuboid(trash.size.x, trash.size.y))
-        // .insert(ColliderMassProperties::Mass(10.0))
-        // .insert(Restitution::coefficient(0.7))
-        // .insert(ActiveEvents::COLLISION_EVENTS)
-        // .insert(TrashAction)
-        // .insert(trash.clone())
-        // .with_children(|parent| {
-        //     parent.spawn(
-        //         TrashTextBundle::new(
-        //             word,
-        //             Anchor::Custom(Vec2::new(0.0, -2.0)),
-        //             Color::GREEN,
-        //             TextStyle {
-        //                 color: Color::WHITE,
-        //                 font_size: 20.0,
-        //                 ..default()
-        //             }
-        //         )
-        //     );
-        // });
-// }
 
 
 fn get_trash_sprite(trash_type: &TrashType, textures: &Res<TextureAssets>) -> Handle<Image> {
@@ -687,29 +630,43 @@ fn highlight_character(
     }
 }
 
+fn remove_explosions(
+    mut commands: Commands,
+    explosion_query: Query<Entity, With<TrashExplosion>>,
+) {
+    for entity in &mut explosion_query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+
 fn remove_trash_text(commands: &mut Commands, trash_entity: &Entity) {
     commands.entity(*trash_entity).remove::<TrashActionActive>();
     commands.entity(*trash_entity).remove::<TrashMarked>();
-    commands.entity(*trash_entity).despawn_descendants();
+    commands.entity(*trash_entity). despawn_descendants();
 
     commands.entity(*trash_entity).insert(TrashActionDuplicate);
 }
 
 fn create_duplicated_trash_from_entity(commands: &mut Commands, sprite: Handle<Image>, trash: Trash, transform: Transform) {
     // let trash = duplicate_trash_query.get_component::<Trash>(*entity1).unwrap();
-    let mut bundle = TrashBundle::new(sprite, trash.clone());
+    let mut trash = trash.clone();
+    trash.power_up = PowerUp::None;
+    trash.activated = false;
+
+    let mut bundle = TrashBundle::new(sprite, trash);
     bundle.velocity = Velocity::zero();
 
     commands.spawn(bundle)
         .insert(transform)
-        .insert(GravityScale(20.0));
+        .insert(GravityScale(40.0));
         // .insert(TrashActionDuplicate);
 }
 
 fn should_delete_text(
     entity: &Entity,
     other: &Entity,
-    active_trash_query: &Query<(Entity, &Velocity), With<TrashActionActive>>,
+    active_trash_query: &Query<(Entity, &Velocity, &Trash, &Transform), With<TrashActionActive>>,
     inactive_trash_query: &Query<(Entity, &Velocity), (Without<TrashActionActive>, With<Trash>)>,
     // mut duplicate_trash_query: Query<(Entity, &Trash, &Transform, &Handle<Image>), (Without<TrashActionActive>, With<TrashActionDuplicate>)>,
     walls_query: &Query<Entity, With<Wall>>,
@@ -755,7 +712,7 @@ fn should_delete_text(
 fn should_duplicate_trash(
     entity: &Entity,
     other: &Entity,
-    active_trash_query: &Query<(Entity, &Velocity), With<TrashActionActive>>,
+    active_trash_query: &Query<(Entity, &Velocity, &Trash, &Transform), With<TrashActionActive>>,
     duplicate_trash_query: &Query<(Entity, &Trash, &Transform, &Handle<Image>), With<TrashActionDuplicate>>,
     walls_query: &Query<Entity, With<Wall>>,
     floor_query: &Query<Entity, With<Floor>>,
@@ -771,15 +728,130 @@ fn should_duplicate_trash(
 }
 
 
+fn should_explode(
+    entity: &Entity,
+    other: &Entity,
+    explosion_query: &Query<&Transform, With<TrashExplosion>>,
+    trash_query: &Query<Entity, With<Trash>>
+) -> bool {
+
+    if let Ok(_) = explosion_query.get(*other) {
+        if trash_query.get(*entity).is_ok() {
+            return true;
+        }
+    }
+
+    false
+}
+
+
+fn handle_power_up_event(
+    entity: &Entity,
+    // texture: Handle<Image>,
+    commands: &mut Commands,
+    trash_query: &Query<(Entity, &Velocity, &Trash, &Transform), With<TrashActionActive>>,
+) -> PowerUpEvent {
+    // for (trash, transform) in &mut trash_query.iter() {
+    if let Ok((_, _, trash, transform)) = trash_query.get(*entity) {
+        if trash.activated {
+            match trash.power_up {
+                PowerUp::Explosion => {
+                    println!("Spawning Explosion: {:?}", transform);
+                    commands.spawn(
+                        SpriteBundle {
+                            ..default()
+                        }
+                    )
+                    .insert(transform.clone())
+                    .insert(Collider::cuboid(100.0, 100.0))
+                    .insert(Sensor)
+                    .insert(TrashExplosion);
+
+                    // commands.entity(*entity).despawn_recursive();
+                    return PowerUpEvent::EntityDestroyed;
+                    // commands.entity(transform.parent().unwrap().id()).insert(TrashExplosion);
+                    // commands.entity(transform.parent().unwrap().id()).remove::<TrashActionActive>();
+                    // commands.entity(transform.parent().unwrap().id()).remove::<TrashMarked>();
+                    // commands.entity(transform.parent().unwrap().id()).despawn_descendants();
+                },
+                _ => {}
+            }
+        }
+    }
+
+    PowerUpEvent::None
+    // }
+}
+
+fn handle_trash_entity_collision(
+    entity: &Entity,
+    other: &Entity,
+    commands: &mut Commands,
+    typing_buffer: &mut ResMut<TypingBuffer>,
+    active_trash_query: &Query<(Entity, &Velocity, &Trash, &Transform), With<TrashActionActive>>,
+    inactive_trash_query: &Query<(Entity, &Velocity), (Without<TrashActionActive>, With<Trash>)>,
+    duplicate_trash_query: &Query<(Entity, &Trash, &Transform, &Handle<Image>), With<TrashActionDuplicate>>,
+    marked_trash_query: &Query<Entity, With<TrashMarked>>,
+    // trash_query: Query<(&mut Trash, &Transform), With<TrashActionActive>>,
+    explosion_query: &Query<&Transform, With<TrashExplosion>>,
+    all_trash_query: &Query<Entity, With<Trash>>,
+    // duplicate_trash_query: Query<&Trash, (Without<TrashActionActive>, With<TrashActionDuplicate>)>,
+    walls_query: &Query<Entity, With<Wall>>,
+    floor_query: &Query<Entity, With<Floor>>,
+
+) {
+    let powerup_event = handle_power_up_event(entity, commands, active_trash_query);
+
+    if should_explode(entity, other, explosion_query, all_trash_query) {
+        if marked_trash_query.get(*entity).is_ok() {
+            typing_buffer.0 = "".to_string();
+        }
+        commands.entity(*entity).despawn_recursive();
+        return;
+    }
+
+    let mut should_remove_text = false;
+    if should_delete_text(entity, other, active_trash_query, inactive_trash_query, walls_query, floor_query) {
+        if marked_trash_query.get(*entity).is_ok() {
+            typing_buffer.0 = "".to_string();
+        }
+        should_remove_text = true;
+        // return;
+
+    }
+
+
+    if should_duplicate_trash(entity, other, active_trash_query, duplicate_trash_query, walls_query, floor_query) {
+        let trash_data = duplicate_trash_query.get(*entity).unwrap();
+        commands.entity(trash_data.0).remove::<TrashActionDuplicate>();
+        let mut transform = trash_data.2.clone();
+        transform.translation.y += 10.0;
+        create_duplicated_trash_from_entity(
+            commands,
+            trash_data.3.clone(),
+            trash_data.1.clone(),
+            trash_data.2.clone());
+    }
+
+
+    if powerup_event != PowerUpEvent::EntityDestroyed && should_remove_text {
+        remove_trash_text(commands, entity);
+    }
+}
+
+
 fn handle_trash_collision(
     mut commands: Commands,
-    // textures: Res<TextureAssets>,
     mut typing_buffer: ResMut<TypingBuffer>,
     mut collision_events: EventReader<CollisionEvent>,
-    active_trash_query: Query<(Entity, &Velocity), With<TrashActionActive>>,
+    // mut trash_query: Query<(&mut Trash, &Transform), With<TrashActionActive>>,
+    active_trash_query: Query<(Entity, &Velocity, &Trash, &Transform), With<TrashActionActive>>,
     inactive_trash_query: Query<(Entity, &Velocity), (Without<TrashActionActive>, With<Trash>)>,
     duplicate_trash_query: Query<(Entity, &Trash, &Transform, &Handle<Image>), With<TrashActionDuplicate>>,
     marked_trash_query: Query<Entity, With<TrashMarked>>,
+    // trash_query: Query<(&mut Trash, &Transform), With<TrashActionActive>>,
+    explosion_query: Query<&Transform, With<TrashExplosion>>,
+    all_trash_query: Query<Entity, With<Trash>>,
     // duplicate_trash_query: Query<&Trash, (Without<TrashActionActive>, With<TrashActionDuplicate>)>,
     walls_query: Query<Entity, With<Wall>>,
     floor_query: Query<Entity, With<Floor>>,
@@ -787,44 +859,89 @@ fn handle_trash_collision(
     for collision_event in collision_events.read() {
         match collision_event {
             CollisionEvent::Started(entity1, entity2, _) => {
-                if should_delete_text(entity1, entity2, &active_trash_query, &inactive_trash_query, &walls_query, &floor_query) {
-                    if marked_trash_query.get(*entity1).is_ok() {
-                        typing_buffer.0 = "".to_string();
-                    }
-                    remove_trash_text(&mut commands, &entity1);
 
-                } else if should_delete_text(entity2, entity1, &active_trash_query, &inactive_trash_query, &walls_query, &floor_query) {
-                    if marked_trash_query.get(*entity2).is_ok() {
-                        typing_buffer.0 = "".to_string();
-                    }
-                    remove_trash_text(&mut commands, &entity2);
-                }
+                handle_trash_entity_collision(
+                    entity1,
+                    entity2,
+                    &mut commands,
+                    &mut typing_buffer,
+                    &active_trash_query,
+                    &inactive_trash_query,
+                    &duplicate_trash_query,
+                    &marked_trash_query,
+                    &explosion_query,
+                    &all_trash_query,
+                    &walls_query,
+                    &floor_query
+                );
 
-                let mut duplicate_entity: Option<(Entity, &Trash, &Transform, &Handle<Image>)> = None;
+                handle_trash_entity_collision(
+                    entity2,
+                    entity1,
+                    &mut commands,
+                    &mut typing_buffer,
+                    &active_trash_query,
+                    &inactive_trash_query,
+                    &duplicate_trash_query,
+                    &marked_trash_query,
+                    &explosion_query,
+                    &all_trash_query,
+                    &walls_query,
+                    &floor_query
+                );
+                // let mut should_remove_text = false;
+                //
+                // if should_delete_text(entity1, entity2, &active_trash_query, &inactive_trash_query, &walls_query, &floor_query) {
+                //     if marked_trash_query.get(*entity1).is_ok() {
+                //         typing_buffer.0 = "".to_string();
+                //     }
+                //     remove_trash_text(&mut commands, &entity1);
+                //
+                // } else if should_delete_text(entity2, entity1, &active_trash_query, &inactive_trash_query, &walls_query, &floor_query) {
+                //     if marked_trash_query.get(*entity2).is_ok() {
+                //         typing_buffer.0 = "".to_string();
+                //     }
+                //     remove_trash_text(&mut commands, &entity2);
+                // }
+                //
+                // let mut duplicate_entity: Option<(Entity, &Trash, &Transform, &Handle<Image>)> = None;
+                //
+                // if should_duplicate_trash(entity1, entity2, &active_trash_query, &duplicate_trash_query, &walls_query, &floor_query) {
+                //     let trash_data = duplicate_trash_query.get(*entity1).unwrap();
+                //     commands.entity(trash_data.0).remove::<TrashActionDuplicate>();
+                //     duplicate_entity = Some(trash_data.clone());
+                //
+                // }
+                //
+                // if should_duplicate_trash(entity2, entity1, &active_trash_query, &duplicate_trash_query, &walls_query, &floor_query) {
+                //     let trash_data = duplicate_trash_query.get(*entity2).unwrap();
+                //     commands.entity(trash_data.0).remove::<TrashActionDuplicate>();
+                //     duplicate_entity = Some(trash_data.clone());
+                //
+                // }
 
-                if should_duplicate_trash(entity1, entity2, &active_trash_query, &duplicate_trash_query, &walls_query, &floor_query) {
-                    let trash_data = duplicate_trash_query.get(*entity1).unwrap();
-                    commands.entity(trash_data.0).remove::<TrashActionDuplicate>();
-                    duplicate_entity = Some(trash_data.clone());
+                // handle_power_up_event(entity1, &mut commands, &active_trash_query);
+                // handle_power_up_event(entity2, &mut commands, &active_trash_query);
+                //
+                // if should_explode(entity1, entity2, &explosion_query, &all_trash_query) {
+                //     commands.entity(*entity1).despawn_recursive();
+                // }
+                //
+                // if should_explode(entity2, entity1, &explosion_query, &all_trash_query) {
+                //     commands.entity(*entity1).despawn_recursive();
+                // }
 
-                }
+                // if let Some(trash_data) = duplicate_entity {
+                //     let mut transform = trash_data.2.clone();
+                //     transform.translation.y += 10.0;
+                //     create_duplicated_trash_from_entity(
+                //         &mut commands,
+                //         trash_data.3.clone(),
+                //         trash_data.1.clone(),
+                //         trash_data.2.clone());
+                // }
 
-                if should_duplicate_trash(entity2, entity1, &active_trash_query, &duplicate_trash_query, &walls_query, &floor_query) {
-                    let trash_data = duplicate_trash_query.get(*entity2).unwrap();
-                    commands.entity(trash_data.0).remove::<TrashActionDuplicate>();
-                    duplicate_entity = Some(trash_data.clone());
 
-                }
-
-                if let Some(trash_data) = duplicate_entity {
-                    let mut transform = trash_data.2.clone();
-                    transform.translation.y += 10.0;
-                    create_duplicated_trash_from_entity(
-                        &mut commands,
-                        trash_data.3.clone(),
-                        trash_data.1.clone(),
-                        trash_data.2.clone());
-                }
             }
             CollisionEvent::Stopped(_entity1, _entity2, _) => {},
         }
@@ -888,9 +1005,10 @@ fn clamp_duplicated_trash(
 }
 
 
-fn destroy_matching_trash(
+fn activate_matching_trash(
     mut commands: Commands,
-    trash_query: Query<(&Parent, &Transform, &TrashText)>,
+    trash_text_query: Query<(&Parent, &Transform, &TrashText)>,
+    mut trash_query: Query<(&mut Trash, &Transform), With<TrashActionActive>>,
     mut typing_buffer: ResMut<TypingBuffer>,
     mut score: ResMut<Score>,
     combo_modifier: Res<ComboModifier>,
@@ -903,12 +1021,31 @@ fn destroy_matching_trash(
     // let mut trash_to_destroy: Vec<&Parent> = Vec::new();
     let mut should_clear_buffer = false;
 
-    for (entity, _transform, trash_text) in &mut trash_query.iter() {
+    for (entity, _transform, trash_text) in &mut trash_text_query.iter() {
         if typing_buffer.0 == trash_text.word {
+            if let Ok(mut trash) = trash_query.get_mut(entity.get()) {
+                if trash.0.activated {
+                    continue;
+                }
+
+                match trash.0.power_up {
+                    PowerUp::Explosion => {
+                        // commands.spawn(TrashExplosion)
+                        //     .insert(trash.1.clone());
+                    },
+                    PowerUp::Link => {
+
+                    },
+                    PowerUp::None => {
+                        commands.entity(entity.get()).despawn_recursive();
+                    }
+                }
+
+                trash.0.activated = true;
+                score.0 += 1 * combo_modifier.0;
+                should_clear_buffer = true;
+            }
             // trash_to_destroy.push(entity);
-            score.0 += 1 * combo_modifier.0;
-            commands.entity(entity.get()).despawn_recursive();
-            should_clear_buffer = true;
         }
     }
     // for entity in &trash_to_destroy {
