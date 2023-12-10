@@ -35,7 +35,14 @@ pub enum RunState {
 #[derive(Clone, Debug)]
 pub enum TrashType {
     Bottle,
-    Pizza
+    Pizza,
+    BigBox,
+    GlassBottle,
+    News,
+    Shampoo,
+    SmallCan,
+    Soda,
+    Spray,
 }
 
 impl Default for TrashType {
@@ -207,7 +214,7 @@ impl TrashBundle {
 impl Plugin for TrashPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(TrashSpawnTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
-        .insert_resource(DifficultyTimer(Timer::from_seconds(30.0, TimerMode::Repeating)))
+        .insert_resource(DifficultyTimer(Timer::from_seconds(15.0, TimerMode::Repeating)))
         // .insert_resource(BufferTextDeleteTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
         .insert_resource(TypingBuffer("".to_string()))
         .insert_resource(AvailableWords(get_available_words_from_file()))
@@ -241,6 +248,13 @@ impl Trash {
         match trash_type {
             TrashType::Bottle => Self::bottle(),
             TrashType::Pizza => Self::pizza(),
+            TrashType::News => Self::news(),
+            TrashType::Shampoo => Self::shampoo(),
+            TrashType::SmallCan => Self::small_can(),
+            TrashType::Soda => Self::soda(),
+            TrashType::Spray => Self::spray(),
+            TrashType::BigBox => Self::big_box(),
+            TrashType::GlassBottle => Self::glass_bottle(),
         }
     }
 
@@ -256,7 +270,70 @@ impl Trash {
     pub fn pizza() -> Self {
         Self {
             trash_type: TrashType::Pizza,
-            size: Vec2::new(32.0, 16.0),
+            size: Vec2::new(32.0, 16.0), // 60x30
+            power_up: PowerUp::None,
+            activated: false,
+        }
+    }
+
+    pub fn big_box() -> Self {
+        Self {
+            trash_type: TrashType::BigBox,
+            size: Vec2::new(25.0, 24.0), // 51x48
+            power_up: PowerUp::None,
+            activated: false,
+        }
+    }
+
+    pub fn glass_bottle() -> Self {
+        Self {
+            trash_type: TrashType::GlassBottle,
+            size: Vec2::new(8.0, 25.0), // 17x50
+            power_up: PowerUp::None,
+            activated: false,
+        }
+    }
+
+    pub fn news() -> Self {
+        Self {
+            trash_type: TrashType::News,
+            size: Vec2::new(26.0, 16.0), // 53x28
+            power_up: PowerUp::None,
+            activated: false,
+        }
+    }
+
+    pub fn shampoo() -> Self {
+        Self {
+            trash_type: TrashType::Shampoo,
+            size: Vec2::new(17.0, 22.0), // 36x44
+            power_up: PowerUp::None,
+            activated: false,
+        }
+    }
+
+    pub fn small_can() -> Self {
+        Self {
+            trash_type: TrashType::SmallCan,
+            size: Vec2::new(11.0, 15.0), // 23x30
+            power_up: PowerUp::None,
+            activated: false,
+        }
+    }
+
+    pub fn soda() -> Self {
+        Self {
+            trash_type: TrashType::Soda,
+            size: Vec2::new(9.0, 17.0), // 18x34
+            power_up: PowerUp::None,
+            activated: false,
+        }
+    }
+
+    pub fn spray() -> Self {
+        Self {
+            trash_type: TrashType::Spray,
+            size: Vec2::new(8.0, 20.0), // 17x40
             power_up: PowerUp::None,
             activated: false,
         }
@@ -289,13 +366,28 @@ fn spawn_trash(
     mut previous_spawn_position: Local<f32>,
 ) {
 
-    static SPAWN_CHANCES: [TrashType; 2] = [TrashType::Bottle, TrashType::Pizza];
-    static POWER_UP_CHANCES: [PowerUp; 4] = [
+    static SPAWN_CHANCES: [TrashType; 9] = [
+        TrashType::Bottle,
+        TrashType::Pizza,
+        TrashType::BigBox,
+        TrashType::GlassBottle,
+        TrashType::News,
+        TrashType::Shampoo,
+        TrashType::SmallCan,
+        TrashType::Soda,
+        TrashType::Spray,
+    ];
+    static POWER_UP_CHANCES: [PowerUp; 10] = [
+        PowerUp::None,
+        PowerUp::None,
+        PowerUp::None,
+        PowerUp::None,
+        PowerUp::None,
+        PowerUp::None,
         PowerUp::None,
         PowerUp::None,
         PowerUp::None,
         PowerUp::Explosion,
-        // PowerUp::Link
     ];
 
     if spawn_timer.0.tick(time.delta()).just_finished() {
@@ -330,7 +422,7 @@ fn spawn_trash(
             Color::GREEN,
             TextStyle {
                 color: Color::WHITE,
-                font_size: 20.0,
+                font_size: 30.0,
                 ..default()
             }
         );
@@ -340,6 +432,13 @@ fn spawn_trash(
             .insert(TrashActionDuplicate)
             .with_children(|parent| {
                 parent.spawn(trash_text);
+                    // .insert(
+                    //     Sprite {
+                    //         color: Color::GRAY,
+                    //         // custom_size: Some(Vec2::new(10.0, 10.0)),
+                    //         ..default()
+                    //     }
+                    // );
             });
 
     }
@@ -350,6 +449,13 @@ fn get_trash_sprite(trash_type: &TrashType, textures: &Res<TextureAssets>) -> Ha
     match trash_type {
         TrashType::Bottle => textures.bottle.clone(),
         TrashType::Pizza => textures.pizza.clone(),
+        TrashType::BigBox => textures.big_box.clone(),
+        TrashType::GlassBottle => textures.glass_bottle.clone(),
+        TrashType::News => textures.news.clone(),
+        TrashType::Shampoo => textures.shampoo.clone(),
+        TrashType::SmallCan => textures.small_can.clone(),
+        TrashType::Soda => textures.soda.clone(),
+        TrashType::Spray => textures.spray.clone(),
     }
 }
 
@@ -421,8 +527,8 @@ fn setup(
                 custom_size: Some(Vec2::new(window.width() - 85.0, 10.0)),
                 ..default()
             }, // Set the size (20x20)
-            // transform: Transform::from_translation(Vec3::new(0.0, window.height() - 150.0, 0.0)),
-            transform: Transform::from_translation(Vec3::new(0.0, window.height() - 800.0, 0.0)),
+            transform: Transform::from_translation(Vec3::new(0.0, window.height() - 294.0, 0.0)),
+            // transform: Transform::from_translation(Vec3::new(0.0, window.height() - 800.0, 0.0)),
             ..default()
         }
     )
@@ -430,6 +536,19 @@ fn setup(
     .insert(Sensor)
     .insert(GameOverLine);
 
+    commands.spawn(
+        SpriteBundle {
+            sprite: Sprite {
+                // color: Color::rgb(0.2, 0.2, 0.2),
+                custom_size: Some(Vec2::new(window.width(), window.height())),
+                ..default()
+            },
+            texture: textures.background.clone(),
+            transform: Transform::from_translation(Vec3::new(0.0, max_y, -4.0)),
+            // transform: Transform::from_translation(Vec3::new(0.0, window.height() - 800.0, 0.0)),
+            ..default()
+        }
+    );
 }
 
 
@@ -815,7 +934,7 @@ fn handle_power_up_event(
                         }
                     )
                     .insert(transform.clone())
-                    .insert(Collider::cuboid(100.0, 100.0))
+                    .insert(Collider::cuboid(50.0, 50.0))
                     .insert(Sensor)
                     .insert(TrashExplosion);
 
@@ -862,6 +981,7 @@ fn handle_trash_entity_collision(
         if marked_trash_query.get(*entity).is_ok() {
             typing_buffer.0 = "".to_string();
         }
+        println!("Explosion!: {:?}, {:?}", entity, other);
         commands.entity(*entity).despawn_recursive();
         return;
     }
@@ -872,7 +992,6 @@ fn handle_trash_entity_collision(
             typing_buffer.0 = "".to_string();
         }
         should_remove_text = true;
-        // return;
 
     }
 

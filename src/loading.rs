@@ -41,8 +41,24 @@ pub struct TextureAssets {
     pub bottle: Handle<Image>,
     #[asset(path = "textures/pizza.png")]
     pub pizza: Handle<Image>,
+    #[asset(path = "textures/big_box.png")]
+    pub big_box: Handle<Image>,
+    #[asset(path = "textures/glass_bottle.png")]
+    pub glass_bottle: Handle<Image>,
+    #[asset(path = "textures/news.png")]
+    pub news: Handle<Image>,
+    #[asset(path = "textures/shampo.png")]
+    pub shampoo: Handle<Image>,
+    #[asset(path = "textures/small_can.png")]
+    pub small_can: Handle<Image>,
+    #[asset(path = "textures/soda.png")]
+    pub soda: Handle<Image>,
+    #[asset(path = "textures/spray.png")]
+    pub spray: Handle<Image>,
     #[asset(path = "textures/ground.png")]
     pub ground: Handle<Image>,
     #[asset(path = "textures/wall.png")]
     pub wall: Handle<Image>,
+    #[asset(path = "textures/background-1.png")]
+    pub background: Handle<Image>,
 }
