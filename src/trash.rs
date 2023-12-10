@@ -527,8 +527,8 @@ fn setup(
                 custom_size: Some(Vec2::new(window.width() - 85.0, 10.0)),
                 ..default()
             }, // Set the size (20x20)
-            // transform: Transform::from_translation(Vec3::new(0.0, window.height() - 294.0, 0.0)),
-            transform: Transform::from_translation(Vec3::new(0.0, window.height() - 800.0, 0.0)),
+            transform: Transform::from_translation(Vec3::new(0.0, window.height() - 294.0, 0.0)),
+            // transform: Transform::from_translation(Vec3::new(0.0, window.height() - 800.0, 0.0)),
             ..default()
         }
     )
