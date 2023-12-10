@@ -33,7 +33,6 @@ impl Default for ButtonColors {
 struct Menu;
 
 fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>, window: Query<&Window>) {
-    info!("menu");
     let window_height = window.single().height() / 2.0;
 
     commands.spawn(Camera2dBundle {

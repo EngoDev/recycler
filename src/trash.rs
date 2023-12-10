@@ -414,7 +414,6 @@ fn spawn_trash(
             // trash.size = Vec2::new(32.0, 32.0);
         }
 
-        println!("Spawning trash: {:?}", trash);
         let trash_bundle = TrashBundle::new(get_trash_sprite(&trash.trash_type, &textures), trash);
         let trash_text = TrashBundle::create_text(
             get_random_word(&available_words),
@@ -927,7 +926,6 @@ fn handle_power_up_event(
         if trash.activated {
             match trash.power_up {
                 PowerUp::Explosion => {
-                    println!("Spawning Explosion: {:?}", transform);
                     commands.spawn(
                         SpriteBundle {
                             ..default()
@@ -981,7 +979,6 @@ fn handle_trash_entity_collision(
         if marked_trash_query.get(*entity).is_ok() {
             typing_buffer.0 = "".to_string();
         }
-        println!("Explosion!: {:?}, {:?}", entity, other);
         commands.entity(*entity).despawn_recursive();
         return;
     }
@@ -1062,7 +1059,6 @@ fn spawn_game_over_menu(
     score: Res<Score>,
     // mut next_state: ResMut<NextState<GameState>>,
 ) {
-    println!("Game over");
     let style = Style {
         position_type: PositionType::Absolute,
         // width: Val::Percent(100.0),
@@ -1335,15 +1331,12 @@ fn update_difficuly(
 
     if difficulty_timer.0.tick(time.delta()).just_finished() {
         if trash_spawn_timer.0.duration() <= Duration::from_secs_f32(1.0) {
-            println!("Difficulty is maxed out");
             return;
             // let duration = trash_spawn_timer.0.duration().sub(Duration::from_secs_f32(0.1));
             // trash_spawn_timer.0.set_duration(duration) ;
         }
 
         let duration = trash_spawn_timer.0.duration().sub(Duration::from_secs_f32(0.2));
-        println!("Duration is: {}", trash_spawn_timer.0.duration().as_secs());
-        println!("Setting duration: {}", duration.as_millis());
         trash_spawn_timer.0.set_duration(duration) ;
 
     }
