@@ -2,9 +2,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
+use bevy::window::{PrimaryWindow, WindowResolution};
 use bevy::winit::WinitWindows;
 use bevy::DefaultPlugins;
+use bevy_rapier2d::plugin::{RapierPhysicsPlugin, NoUserData};
+use bevy_rapier2d::render::RapierDebugRenderPlugin;
 use recycler::GamePlugin; // ToDo: Replace bevy_game with your new crate name.
 use std::io::Cursor;
 use bevy::asset::AssetMetaCheck;
@@ -24,10 +26,13 @@ fn main() {
                 fit_canvas_to_parent: true,
                 // Tells wasm not to override default event handling, like F5 and Ctrl+R
                 prevent_default_event_handling: false,
+                resolution: WindowResolution::new(700.0, 900.0),
                 ..default()
             }),
             ..default()
         }))
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
+        // .add_plugins(RapierDebugRenderPlugin::default())
         .add_plugins(GamePlugin)
         .add_systems(Startup, set_window_icon)
         .run();
