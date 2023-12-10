@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use crate::loading::TextureAssets;
 use crate::GameState;
+use crate::menu::{ButtonColors, ChangeState};
 use crate::score::{Score, ComboMeter, ComboModifier};
 use crate::trash_text::{TrashText, TrashTextBundle, highlight_characters, remove_highlight};
 use bevy::prelude::*;
@@ -22,6 +23,14 @@ const TRASH_MAXIMUM_HORIZONTAL_VELOCITY_LENGTH: f32 = 600.0;
 const TRASH_SPAWN_DISTANCE_BETWEEN_SPAWNS: f32 = 30.0;
 
 pub struct TrashPlugin;
+
+
+#[derive(Clone, Debug)]
+pub enum RunState {
+    Running,
+    Ended,
+}
+
 
 #[derive(Clone, Debug)]
 pub enum TrashType {
@@ -52,6 +61,7 @@ impl Default for PowerUp {
 pub enum PowerUpEvent {
     None,
     EntityDestroyed,
+    DestroyLinked,
 }
 
 
@@ -91,6 +101,12 @@ pub struct Wall;
 
 #[derive(Component, Default)]
 pub struct Floor;
+
+#[derive(Component, Default)]
+pub struct GameOverLine;
+
+#[derive(Component, Default)]
+pub struct GameOver;
 
 // #[derive(Component, Debug, Clone)]
 // pub struct TrashLabel;
@@ -199,19 +215,24 @@ impl Plugin for TrashPlugin {
         .add_systems(Update, (
                 spawn_trash.run_if(in_state(GameState::Playing)),
                 trash_power_ups_effects.after(spawn_trash),
-                update_difficuly.after(setup),
+                update_difficuly.after(setup).run_if(in_state(GameState::Playing)),
                 // destroy_trash_text.after(handle_trash_collision),
-                typing.after(setup),
-                handle_trash_collision.after(typing),
+                typing.after(setup).run_if(in_state(GameState::Playing)),
+                handle_trash_collision.after(typing).run_if(in_state(GameState::Playing)),
+                // is_game_over.before(handle_trash_collision),
                 clamp_duplicated_trash.after(handle_trash_collision),
                 activate_matching_trash.after(typing).before(handle_trash_collision),
                 remove_explosions.after(handle_trash_collision),
                 update_buffer_text.after(typing),
                 highlight_character.after(typing),
+                click_restart_button.run_if(in_state(GameState::GameOver)),
             )
         )
-        .add_systems(PostStartup, fix_trash_label_rotation.before(TransformSystem::TransformPropagate))
-        .add_systems(PostUpdate, fix_trash_label_rotation.before(TransformSystem::TransformPropagate));
+        .add_systems(PostStartup, fix_trash_label_rotation.before(TransformSystem::TransformPropagate).run_if(in_state(GameState::Playing)))
+        .add_systems(PostUpdate, fix_trash_label_rotation.before(TransformSystem::TransformPropagate).run_if(in_state(GameState::Playing)))
+        .add_systems(OnEnter(GameState::GameOver), spawn_game_over_menu)
+        .add_systems(OnExit(GameState::Playing), delete_all_play_entities)
+        .add_systems(OnExit(GameState::GameOver), delete_all_gameover_entities);
     }
 }
 
@@ -269,10 +290,12 @@ fn spawn_trash(
 ) {
 
     static SPAWN_CHANCES: [TrashType; 2] = [TrashType::Bottle, TrashType::Pizza];
-    static POWER_UP_CHANCES: [PowerUp; 3] = [
+    static POWER_UP_CHANCES: [PowerUp; 4] = [
+        PowerUp::None,
+        PowerUp::None,
         PowerUp::None,
         PowerUp::Explosion,
-        PowerUp::Link
+        // PowerUp::Link
     ];
 
     if spawn_timer.0.tick(time.delta()).just_finished() {
@@ -330,6 +353,7 @@ fn get_trash_sprite(trash_type: &TrashType, textures: &Res<TextureAssets>) -> Ha
     }
 }
 
+
 fn setup(
     mut commands: Commands,
     textures: Res<TextureAssets>,
@@ -348,33 +372,33 @@ fn setup(
     //     })
     //     .with_children(|parent| {
 
-    commands.spawn((
-        TextBundle::from_section(
-            typing_buffer.0.clone(),
-            TextStyle {
-                font_size: 50.0,
-                ..default()
-            }
-        )
-        // .with_text_alignment(TextAlignment::Center)
-        .with_style(Style {
-                // align_self: AlignSelf::FlexEnd,
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                position_type: PositionType::Absolute,
-                top: Val::Percent(50.0),
-                left: Val::Percent(50.0),
-                max_width: Val::Px(200.0),
-                max_height: Val::Percent(100.0),
-                flex_wrap: FlexWrap::WrapReverse,
-                // flex_wrap: FlexWrap::Wrap,
-                // bottom: Val::Px(5.0),
-                // right: Val::Px(5.0),
-                ..default()
-            }),
-        BufferText,
-        )
-    );
+    // commands.spawn((
+    //     TextBundle::from_section(
+    //         typing_buffer.0.clone(),
+    //         TextStyle {
+    //             font_size: 50.0,
+    //             ..default()
+    //         }
+    //     )
+    //     // .with_text_alignment(TextAlignment::Center)
+    //     .with_style(Style {
+    //             // align_self: AlignSelf::FlexEnd,
+    //             flex_direction: FlexDirection::Row,
+    //             align_items: AlignItems::Center,
+    //             position_type: PositionType::Absolute,
+    //             top: Val::Percent(50.0),
+    //             left: Val::Percent(50.0),
+    //             max_width: Val::Px(200.0),
+    //             max_height: Val::Percent(100.0),
+    //             flex_wrap: FlexWrap::WrapReverse,
+    //             // flex_wrap: FlexWrap::Wrap,
+    //             // bottom: Val::Px(5.0),
+    //             // right: Val::Px(5.0),
+    //             ..default()
+    //         }),
+    //     BufferText,
+    //     )
+    // );
 
     // });
 
@@ -383,7 +407,29 @@ fn setup(
     let max_x: f32 = window.width() / 2.0;
     let max_y = window.height() / 2.0;
 
-    create_borders(&mut commands, &textures, max_x, max_y)
+    create_borders(&mut commands, &textures, max_x, max_y);
+
+    // commands.spawn(Sprite {
+    //     color: Color::RED,
+    //     custom_size: Some(Vec2::new(max_x, 10.0)),
+    //     ..default()
+    // })
+    commands.spawn(
+        SpriteBundle {
+            sprite: Sprite {
+                color: Color::RED,
+                custom_size: Some(Vec2::new(window.width() - 85.0, 10.0)),
+                ..default()
+            }, // Set the size (20x20)
+            // transform: Transform::from_translation(Vec3::new(0.0, window.height() - 150.0, 0.0)),
+            transform: Transform::from_translation(Vec3::new(0.0, window.height() - 800.0, 0.0)),
+            ..default()
+        }
+    )
+    .insert(Collider::cuboid(window.width() - 85.0, 10.0))
+    .insert(Sensor)
+    .insert(GameOverLine);
+
 }
 
 
@@ -719,10 +765,13 @@ fn should_duplicate_trash(
     duplicate_trash_query: &Query<(Entity, &Trash, &Transform, &Handle<Image>), With<TrashActionDuplicate>>,
     walls_query: &Query<Entity, With<Wall>>,
     floor_query: &Query<Entity, With<Floor>>,
+    game_over_query: &Query<Entity, With<GameOverLine>>,
 
 ) -> bool {
     if duplicate_trash_query.get(*entity).is_ok() {
-        if floor_query.get(*other).is_err() && walls_query.get(*other).is_err() { // && active_trash_query.get(*other).is_err() {
+        if floor_query.get(*other).is_err() &&
+            walls_query.get(*other).is_err() && 
+            game_over_query.get(*other).is_err() {
             return true;
         }
     }
@@ -777,6 +826,9 @@ fn handle_power_up_event(
                     // commands.entity(transform.parent().unwrap().id()).remove::<TrashMarked>();
                     // commands.entity(transform.parent().unwrap().id()).despawn_descendants();
                 },
+                PowerUp::Link => {
+                    return PowerUpEvent::DestroyLinked;
+                },
                 _ => {}
             }
         }
@@ -801,6 +853,7 @@ fn handle_trash_entity_collision(
     // duplicate_trash_query: Query<&Trash, (Without<TrashActionActive>, With<TrashActionDuplicate>)>,
     walls_query: &Query<Entity, With<Wall>>,
     floor_query: &Query<Entity, With<Floor>>,
+    game_over_query: &Query<Entity, With<GameOverLine>>,
 
 ) {
     let powerup_event = handle_power_up_event(entity, commands, active_trash_query);
@@ -823,8 +876,7 @@ fn handle_trash_entity_collision(
 
     }
 
-
-    if should_duplicate_trash(entity, other, active_trash_query, duplicate_trash_query, walls_query, floor_query) {
+    if should_duplicate_trash(entity, other, active_trash_query, duplicate_trash_query, walls_query, floor_query, game_over_query) {
         let trash_data = duplicate_trash_query.get(*entity).unwrap();
         commands.entity(trash_data.0).remove::<TrashActionDuplicate>();
         let mut transform = trash_data.2.clone();
@@ -843,10 +895,205 @@ fn handle_trash_entity_collision(
 }
 
 
+fn is_game_over(
+    entity: &Entity,
+    other: &Entity,
+    commands: &mut Commands,
+    inactive_trash_query: &Query<(Entity, &Velocity), (Without<TrashActionActive>, With<Trash>)>,
+    game_over_query: &Query<Entity, With<GameOverLine>>,
+) -> bool {
+        if game_over_query.get(*entity).is_ok() || game_over_query.get(*other).is_ok() {
+            if inactive_trash_query.get(*entity).is_ok() || inactive_trash_query.get(*other).is_ok() {
+                return true;
+            //         SpriteBundle {
+            // ..default()
+            //         }
+            //     )
+            //     .insert(Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)))
+            //     .insert(Collider::cuboid(100.0, 100.0))
+            //     .insert(Sensor)
+            //     .insert(TrashExplosion);
+
+            }
+        }
+
+    return false;
+}
+
+fn delete_all_play_entities(
+    mut commands: Commands,
+    query: Query<Entity, (Without<GameOver>, Without<Camera>, Without<Window>)>,
+) {
+    for entity in &mut query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn delete_all_gameover_entities(
+    mut commands: Commands,
+    game_over_entities: Query<Entity, With<GameOver>>,
+) {
+    for entity in &mut game_over_entities.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn spawn_game_over_menu(
+    mut commands: Commands,
+    score: Res<Score>,
+    // mut next_state: ResMut<NextState<GameState>>,
+) {
+    println!("Game over");
+    let style = Style {
+        position_type: PositionType::Absolute,
+        // width: Val::Percent(100.0),
+        // height: Val::Px(10.0),
+        // bottom: Val::Px(0.0),
+        top: Val::Percent(30.0),
+        left: Val::Px(120.0),
+        ..default()
+    };
+    commands.spawn(
+        TextBundle {
+            text: Text::from_section(
+                "Game Over".to_string(),
+                TextStyle {
+                    font_size: 100.0,
+                    color: Color::RED,
+                    ..default()
+                }
+            ),
+            style,
+            ..default()
+        },
+    )
+    .insert(Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)))
+    .insert(GameOver);
+
+    commands.spawn(
+        TextBundle {
+            text: Text {
+                sections: vec![
+                    TextSection {
+                        value: "Score: ".to_string(),
+                        style: TextStyle {
+                            font_size: 50.0,
+                            color: Color::WHITE,
+                            ..default()
+                        },
+                    },
+                    TextSection {
+                        value: score.0.to_string(),
+                        style: TextStyle {
+                            font_size: 50.0,
+                            color: Color::GREEN,
+                            ..default()
+                        },
+                    },
+                ],
+                ..default()
+            },
+
+
+            // from_section(
+            //     format!("Score: {}", score.0),
+            //     TextStyle {
+            //         font_size: 100.0,
+            //         color: Color::,
+            //         ..default()
+            //     }
+            // ),
+            style: Style {
+                position_type: PositionType::Absolute,
+                // width: Val::Percent(100.0),
+                // height: Val::Px(10.0),
+                // bottom: Val::Px(0.0),
+                top: Val::Px(100.0),
+                left: Val::Px(120.0),
+                ..default()
+            },
+            ..default()
+        },
+    )
+    .insert(Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)))
+    .insert(GameOver);
+
+
+    let button_colors = ButtonColors::default();
+    commands.spawn((
+        ButtonBundle {
+            // text: Text::from_section(
+            //     "Game Over".to_string(),
+            //     TextStyle {
+            //         font_size: 100.0,
+            //         color: Color::RED,
+            //         ..default()
+            //     }
+            // ),
+            style: Style {
+                position_type: PositionType::Absolute,
+                // width: Val::Percent(100.0),
+                // height: Val::Px(10.0),
+                // bottom: Val::Px(0.0),
+                top: Val::Percent(50.0),
+                left: Val::Px(260.0),
+                ..default()
+            },
+            background_color: button_colors.normal.into(),
+            ..default()
+        },
+        ButtonColors::default(),
+        ChangeState(GameState::Playing),
+    ))
+    .insert(Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)))
+    .insert(GameOver)
+    .with_children(|parent| {
+        parent.spawn(TextBundle::from_section(
+            "Restart",
+            TextStyle {
+                font_size: 40.0,
+                color: Color::rgb(0.9, 0.9, 0.9),
+                ..default()
+            },
+        ));
+    });
+}
+
+fn click_restart_button(
+    mut next_state: ResMut<NextState<GameState>>,
+    mut interaction_query: Query<
+        (
+        &Interaction,
+        &mut BackgroundColor,
+        &mut ButtonColors,
+        Option<&ChangeState>,
+    ),
+    (Changed<Interaction>, With<Button>)
+    >,
+) {
+    for (interaction, mut color, button_colors, change_state) in &mut interaction_query {
+        match *interaction {
+            Interaction::Pressed => {
+                if let Some(state) = change_state {
+                    next_state.set(state.0.clone());
+                } 
+            }
+            Interaction::Hovered => {
+                *color = button_colors.hovered.into();
+            }
+            Interaction::None => {
+                *color = button_colors.normal.into();
+            }
+        }
+    }
+
+}
+
 fn handle_trash_collision(
     mut commands: Commands,
     mut typing_buffer: ResMut<TypingBuffer>,
     mut collision_events: EventReader<CollisionEvent>,
+    mut next_state: ResMut<NextState<GameState>>,
     // mut trash_query: Query<(&mut Trash, &Transform), With<TrashActionActive>>,
     active_trash_query: Query<(Entity, &Velocity, &Trash, &Transform), With<TrashActionActive>>,
     inactive_trash_query: Query<(Entity, &Velocity), (Without<TrashActionActive>, With<Trash>)>,
@@ -858,10 +1105,17 @@ fn handle_trash_collision(
     // duplicate_trash_query: Query<&Trash, (Without<TrashActionActive>, With<TrashActionDuplicate>)>,
     walls_query: Query<Entity, With<Wall>>,
     floor_query: Query<Entity, With<Floor>>,
+    game_over_query: Query<Entity, With<GameOverLine>>,
 ) {
     for collision_event in collision_events.read() {
         match collision_event {
             CollisionEvent::Started(entity1, entity2, _) => {
+
+                if is_game_over(entity1, entity2, &mut commands, &inactive_trash_query, &game_over_query) {
+                    commands.spawn(GameOver);
+                    next_state.set(GameState::GameOver);
+                    return;
+                }
 
                 handle_trash_entity_collision(
                     entity1,
@@ -875,7 +1129,8 @@ fn handle_trash_collision(
                     &explosion_query,
                     &all_trash_query,
                     &walls_query,
-                    &floor_query
+                    &floor_query,
+                    &game_over_query
                 );
 
                 handle_trash_entity_collision(
@@ -890,7 +1145,8 @@ fn handle_trash_collision(
                     &explosion_query,
                     &all_trash_query,
                     &walls_query,
-                    &floor_query
+                    &floor_query,
+                    &game_over_query
                 );
                 // let mut should_remove_text = false;
                 //
@@ -1040,6 +1296,8 @@ fn activate_matching_trash(
                         //     .insert(trash.1.clone());
                     },
                     PowerUp::Link => {
+                        commands.entity(entity.get()).remove::<TrashMarked>();
+                        commands.entity(entity.get()).despawn_descendants();
 
                     },
                     PowerUp::None => {

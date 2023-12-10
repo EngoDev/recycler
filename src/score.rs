@@ -34,10 +34,15 @@ impl Plugin for ScorePlugin {
 
 fn setup(
     mut commands: Commands,
+    mut score: ResMut<Score>,
+    mut combo_modifier: ResMut<ComboModifier>,
     materials: ResMut<Assets<ProgressBarMaterial>>,
-    score: Res<Score>,
-    combo_modifier: Res<ComboModifier>,
+    // score: Res<Score>,
+    // combo_modifier: Res<ComboModifier>,
 ) {
+    score.0 = 0;
+    combo_modifier.0 = 1;
+
     commands.spawn(TextBundle {
         text: Text {
             sections: vec![

@@ -15,9 +15,9 @@ impl Plugin for MenuPlugin {
 }
 
 #[derive(Component)]
-struct ButtonColors {
-    normal: Color,
-    hovered: Color,
+pub struct ButtonColors {
+    pub normal: Color,
+    pub hovered: Color,
 }
 
 impl Default for ButtonColors {
@@ -181,7 +181,7 @@ fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>, window: Quer
 }
 
 #[derive(Component)]
-struct ChangeState(GameState);
+pub struct ChangeState(pub GameState);
 
 #[derive(Component)]
 struct OpenLink(&'static str);
