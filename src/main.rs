@@ -12,6 +12,7 @@ use std::io::Cursor;
 use bevy::asset::AssetMetaCheck;
 use winit::window::Icon;
 
+
 fn main() {
     App::new()
         .insert_resource(Msaa::Off)
@@ -26,7 +27,8 @@ fn main() {
                 fit_canvas_to_parent: true,
                 // Tells wasm not to override default event handling, like F5 and Ctrl+R
                 prevent_default_event_handling: false,
-                resolution: WindowResolution::new(700.0, 900.0),
+                resolution: WindowResolution::new(700.0, 800.0),
+                resizable: false,
                 ..default()
             }),
             ..default()

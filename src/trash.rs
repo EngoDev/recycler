@@ -14,6 +14,9 @@ use bevy_progressbar::ProgressBar;
 use bevy_rapier2d::prelude::*;
 use rand::Rng;
 
+pub const WINDOW_WIDTH: f32 = 700.0;
+pub const WINDOW_HEIGHT: f32 = 800.0;
+
 const BORDER_TILE_SIZE: f32 = 48.0;
 const BORDER_TILE_SCALE: Vec2 = Vec2::new(BORDER_TILE_SIZE, BORDER_TILE_SIZE);
 
@@ -21,6 +24,9 @@ const TRASH_STARTING_VELOCITY: Vec2 = Vec2::new(0.0, -100.0);
 const TRASH_MAXIMUM_VERTICAL_VELOCITY_LENGTH: f32 = 40.0;
 const TRASH_MAXIMUM_HORIZONTAL_VELOCITY_LENGTH: f32 = 600.0;
 const TRASH_SPAWN_DISTANCE_BETWEEN_SPAWNS: f32 = 30.0;
+
+const INITIAL_TRASH_SPAWN_RATE: f32 = 2.0;
+const INITIAL_DIFICULTY_INCREASE_RATE: f32 = 10.0;
 
 pub struct TrashPlugin;
 
@@ -213,8 +219,8 @@ impl TrashBundle {
 /// Player logic is only active during the State `GameState::Playing`
 impl Plugin for TrashPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(TrashSpawnTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
-        .insert_resource(DifficultyTimer(Timer::from_seconds(15.0, TimerMode::Repeating)))
+        app.insert_resource(TrashSpawnTimer(Timer::from_seconds(INITIAL_TRASH_SPAWN_RATE, TimerMode::Repeating)))
+        .insert_resource(DifficultyTimer(Timer::from_seconds(INITIAL_DIFICULTY_INCREASE_RATE, TimerMode::Repeating)))
         // .insert_resource(BufferTextDeleteTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
         .insert_resource(TypingBuffer("".to_string()))
         .insert_resource(AvailableWords(get_available_words_from_file()))
@@ -225,7 +231,7 @@ impl Plugin for TrashPlugin {
                 update_difficuly.after(setup).run_if(in_state(GameState::Playing)),
                 // destroy_trash_text.after(handle_trash_collision),
                 typing.after(setup).run_if(in_state(GameState::Playing)),
-                handle_trash_collision.after(typing).run_if(in_state(GameState::Playing)),
+                handle_trash_collision.after(activate_matching_trash).run_if(in_state(GameState::Playing)),
                 // is_game_over.before(handle_trash_collision),
                 clamp_duplicated_trash.after(handle_trash_collision),
                 activate_matching_trash.after(typing).before(handle_trash_collision),
@@ -394,8 +400,10 @@ fn spawn_trash(
         let window = window.single();
 
         let mut random = rand::thread_rng();
-        let max_x: f32 = window.width() / 2.0;
-        let y_pos = (window.height() / 2.0) * 2.0;
+        // let max_x: f32 = window.width() / 2.0;
+        // let y_pos = (window.height() / 2.0) * 2.0;
+        let max_x: f32 = WINDOW_WIDTH / 2.0;
+        let y_pos = WINDOW_HEIGHT;
 
         // let random_x: f32 = random.gen_range(-max_x + BORDER_TILE_SIZE * 2.0 .. max_x - BORDER_TILE_SIZE * 2.0);
         let random_x = get_random_coordinate(max_x, *previous_spawn_position);
@@ -463,8 +471,14 @@ fn setup(
     mut commands: Commands,
     textures: Res<TextureAssets>,
     window: Query<&Window>,
+    mut trash_spawn_timer: ResMut<TrashSpawnTimer>,
+    mut difficulty_timer: ResMut<DifficultyTimer>,
     typing_buffer: Res<TypingBuffer>,
 ) {
+    trash_spawn_timer.0.reset();
+    difficulty_timer.0.reset();
+    trash_spawn_timer.0.set_duration(Duration::from_secs(INITIAL_TRASH_SPAWN_RATE as u64));
+    difficulty_timer.0.set_duration(Duration::from_secs(INITIAL_DIFICULTY_INCREASE_RATE as u64));
     // commands
     //     .spawn(NodeBundle {
     //         style: Style {
@@ -509,8 +523,10 @@ fn setup(
 
 
     let window = window.single();
-    let max_x: f32 = window.width() / 2.0;
-    let max_y = window.height() / 2.0;
+    // let max_x: f32 = window.width() / 2.0;
+    // let max_y = window.height() / 2.0;
+    let max_x: f32 = WINDOW_WIDTH / 2.0;
+    let max_y = WINDOW_HEIGHT / 2.0;
 
     create_borders(&mut commands, &textures, max_x, max_y);
 
@@ -523,10 +539,10 @@ fn setup(
         SpriteBundle {
             sprite: Sprite {
                 color: Color::RED,
-                custom_size: Some(Vec2::new(window.width() - 85.0, 10.0)),
+                custom_size: Some(Vec2::new(WINDOW_WIDTH - 85.0, 10.0)),
                 ..default()
             }, // Set the size (20x20)
-            transform: Transform::from_translation(Vec3::new(0.0, window.height() - 294.0, 0.0)),
+            transform: Transform::from_translation(Vec3::new(0.0, WINDOW_HEIGHT - 390.0, 0.0)),
             // transform: Transform::from_translation(Vec3::new(0.0, window.height() - 800.0, 0.0)),
             ..default()
         }
@@ -539,7 +555,7 @@ fn setup(
         SpriteBundle {
             sprite: Sprite {
                 // color: Color::rgb(0.2, 0.2, 0.2),
-                custom_size: Some(Vec2::new(window.width(), window.height())),
+                custom_size: Some(Vec2::new(WINDOW_WIDTH, WINDOW_HEIGHT)),
                 ..default()
             },
             texture: textures.background.clone(),
@@ -569,7 +585,7 @@ fn create_borders(commands: &mut Commands, textures: &Res<TextureAssets>, max_x:
         .insert(Floor);
     }
 
-    for y in (0..=iterations_y as u32).step_by(BORDER_TILE_SIZE as usize) {
+    for y in (16..=iterations_y as u32).step_by(BORDER_TILE_SIZE as usize) {
         commands.spawn(
             get_border_tile(Vec3::new(x_pos, y as f32, 0.0), textures.wall.clone(), BORDER_TILE_SCALE.clone())
         )
@@ -973,7 +989,10 @@ fn handle_trash_entity_collision(
     game_over_query: &Query<Entity, With<GameOverLine>>,
 
 ) {
-    let powerup_event = handle_power_up_event(entity, commands, active_trash_query);
+    let mut powerup_event = PowerUpEvent::None;
+    if game_over_query.get(*entity).is_err() && game_over_query.get(*other).is_err() {
+        powerup_event = handle_power_up_event(entity, commands, active_trash_query);
+    }
 
     if should_explode(entity, other, explosion_query, all_trash_query) {
         if marked_trash_query.get(*entity).is_ok() {
@@ -1418,7 +1437,7 @@ fn activate_matching_trash(
                 }
 
                 trash.0.activated = true;
-                score.0 += 1 * combo_modifier.0;
+                score.0 += trash_text.word.len() * combo_modifier.0;
                 should_clear_buffer = true;
             }
             // trash_to_destroy.push(entity);
