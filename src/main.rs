@@ -28,7 +28,6 @@ fn main() {
                 // Tells wasm not to override default event handling, like F5 and Ctrl+R
                 prevent_default_event_handling: false,
                 resolution: WindowResolution::new(700.0, 800.0),
-                resizable: false,
                 ..default()
             }),
             ..default()
