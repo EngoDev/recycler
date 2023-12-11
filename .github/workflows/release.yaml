@@ -138,7 +138,7 @@ jobs:
           global-json-file: build/windows/installer/global.json
       - name: Build release
         run: |
-          cargo build --release
+          cargo build
       - name: Prepare release
         run: |
           mkdir target/release/assets && cp -r assets target/release/assets
@@ -146,7 +146,7 @@ jobs:
       - name: Zip release
         uses: vimtor/action-zip@v1
         with:
-          files: target/release/assets/ target/release/credits/ target/release/${{ env.GAME_EXECUTABLE_NAME }}.exe
+          files: target/release/assets/ target/release/credits/ target/debug/${{ env.GAME_EXECUTABLE_NAME }}.exe
           dest: ${{ env.GAME_EXECUTABLE_NAME }}_windows.zip
       - name: Create Installer
         if: ${{ env.BUILD_INSTALLER }}
