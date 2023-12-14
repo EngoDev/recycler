@@ -2,6 +2,9 @@ use bevy::prelude::*;
 use bevy_progressbar::{ProgressBarMaterial, ProgressBar, ProgressBarBundle};
 
 use crate::GameState;
+use crate::game::update_on_wrong_letter;
+use crate::trash::{TrashMarked, handle_trash_collision};
+use crate::typing::TypingBuffer;
 
 pub struct ScorePlugin;
 
@@ -26,7 +29,10 @@ impl Plugin for ScorePlugin {
         .insert_resource(ComboModifier(1))
         // .insert_resource(ProgressBarMaterial)
         .add_systems(OnEnter(GameState::Playing), setup)
-        .add_systems(Update, (update_score, update_modifier));
+        .add_systems(Update, (
+                update_score,
+                update_modifier.after(update_on_wrong_letter)
+            ));
         //     .add_systems(Update, move_player.run_if(in_state(GameState::Playing)));
     }
 }
@@ -125,14 +131,48 @@ fn update_score(
 }
 
 fn update_modifier(
+    typing_buffer: Res<TypingBuffer>,
     mut combo_modifier: ResMut<ComboModifier>,
     mut combo_meter_query: Query<&mut ProgressBar, With<ComboMeter>>,
+    marked_trash_query: Query<Entity, With<TrashMarked>>,
 ) {
+    if !typing_buffer.is_changed() {
+        return;
+    }
+
     for mut progress_bar in &mut combo_meter_query.iter_mut() {
         if progress_bar.is_finished() {
             combo_modifier.0 += 1;
             progress_bar.reset();
+        } else if !marked_trash_query.is_empty() {
+            progress_bar.increase_progress(0.1);
         }
     }
 }
 
+// fn update_combo_meter(
+//     mut commands: Commands,
+//     typing_buffer: Res<TypingBuffer>,
+//     mut combo_meter_query: Query<&mut ProgressBar, With<ComboMeter>>,
+//     mut combo_modifier: ResMut<ComboModifier>,
+//     marked_trash_query: Query<Entity, With<TrashMarked>>,
+// ) {
+//     if !typing_buffer.is_changed() {
+//         return;
+//     }
+//
+//     // if typing_buffer.0.len() == 0 {
+//     //     return;
+//     // }
+//
+//     if !marked_trash_query.is_empty() {
+//         for mut progress_bar in &mut combo_meter_query.iter_mut() {
+//             progress_bar.increase_progress(0.1);
+//             // if progress_bar.is_finished() {
+//             //     combo_modifier.0 += 1;
+//             //     progress_bar.reset();
+//             // }
+//         }
+//     }
+// }
+//
